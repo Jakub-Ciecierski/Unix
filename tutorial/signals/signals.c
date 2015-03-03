@@ -87,8 +87,7 @@ void child_work(int l)
 	printf("[%d] Terminates \n",getpid());
 }
 
-void parent_work(int k, int p)
-{
+void parent_work(int k, int p) {
 	int t ;
 	for(;;) {
 		for(t=k;t>0;t=sleep(t));
@@ -176,7 +175,7 @@ int main(int argc, char** argv)
 		exit(EXIT_FAILURE);
 	}
 
-	parent_work(k, p);
+	
 
 	return EXIT_SUCCESS;
 
