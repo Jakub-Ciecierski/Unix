@@ -45,7 +45,6 @@ volatile sig_atomic_t last_signal = 0;
 
 volatile sig_atomic_t children_count = 0;
 
-//TEMP_FAILURE_RETRY(wait(NULL));
 
 int sethandler( void (*f)(int), int sigNo) {
 	struct sigaction act;
@@ -58,16 +57,12 @@ int sethandler( void (*f)(int), int sigNo) {
 
 void sigchld_handler(int sig)
 {
-	children_count--;
 	last_signal = sig;
+	while(waitpid(0, NULL, WNOHANG) > 0)
+		children_count--;
 }
 
-void internal_node_handler(int sig)
-{
-	last_signal = sig;
-}
-
-void leaf_node_handler(int sig)
+void sigusr_handler(int sig)
 {
 	last_signal = sig;
 }
@@ -76,11 +71,6 @@ void root_node_work(int* children_pid, int n)
 {
 	fprintf(stdout,"R[%d] I'm root node \n",getpid());
 
-	sigset_t mask;	
-	sigemptyset(&mask);
-	sigaddset(&mask,SIGCHLD);
-	sigprocmask(SIG_UNBLOCK,&mask,NULL);
-	
 	int current_signal = 0;
 
 	while(1)
@@ -96,12 +86,14 @@ void root_node_work(int* children_pid, int n)
 		{
 			if(current_signal == 0) {
 				if(kill(children_pid[i], SIGUSR1) < 0)
-					fprintf(stderr,"kill() error \n");
+					if(errno == ESRCH) // allow ESRCH
+						fprintf(stderr,"kill() error: %d \n",children_pid[i]);
 				fprintf(stdout,"R[%d] Sending SIGUSR1 \n",getpid());
 			}
 			if(current_signal == 1) {
 				if(kill(children_pid[i], SIGUSR2) < 0)
-					fprintf(stderr,"kill() error \n");
+					if(errno == ESRCH) // allow ESRCH
+						fprintf(stderr,"kill() error: %d \n",children_pid[i]);
 				fprintf(stdout,"R[%d] Sending SIGUSR2 \n",getpid());
 			}
 		}
@@ -119,19 +111,18 @@ void internal_node_work(int* children_pid, int n)
 	fprintf(stdout,"[%d] I'm internal node \n",getpid());
 
 	last_signal = 0;
-
-	sethandler(internal_node_handler, SIGUSR2);
-	sethandler(internal_node_handler, SIGUSR1);
-
+	
 	sigset_t mask;	
-	sigfillset(&mask);
-	sigdelset(&mask,SIGUSR1);
-	sigdelset(&mask,SIGUSR2);
-	sigdelset(&mask,SIGCHLD);
+	sigset_t old_mask;	
+	sigemptyset(&mask);
+	sigaddset(&mask,SIGUSR1);
+	sigaddset(&mask,SIGUSR2);
+	sigaddset(&mask,SIGCHLD);
+	sigprocmask(SIG_BLOCK,&mask,&old_mask);
 
 	while(1)
 	{
-		sigsuspend(&mask);
+		sigsuspend(&old_mask);
 
 		if(last_signal == SIGCHLD)
 		{
@@ -161,18 +152,18 @@ void leaf_node_work()
 	fprintf(stdout,"[%d] I'm leaf node\n",getpid());
 
 	last_signal = 0;
-	
-	sethandler(leaf_node_handler, SIGUSR1);
-	sethandler(leaf_node_handler, SIGUSR2);
 
 	sigset_t mask;	
-	sigfillset(&mask);
-	sigdelset(&mask,SIGUSR1);
-	sigdelset(&mask,SIGUSR2);
+	sigset_t old_mask;	
+	sigemptyset(&mask);
+	sigaddset(&mask,SIGUSR1);
+	sigaddset(&mask,SIGUSR2);
+	sigaddset(&mask,SIGCHLD);
+	sigprocmask(SIG_BLOCK,&mask,&old_mask);
 
 	while(1)
 	{
-		sigsuspend(&mask);
+		sigsuspend(&old_mask);
 
 		die = rand()%2;
 		if(last_signal == SIGUSR1 && getpid()%2 != 0)
@@ -208,6 +199,9 @@ void create_children(int n,int h, int level, int* children_pid)
 				case 0:
 					create_children(n, h, level + 1, children_pid);
 					return;
+				case -1:
+					error("fork()\n");
+					kill(0, SIGKILL);
 			}
 			children_pid[i] = pid;
 		}
@@ -240,8 +234,6 @@ int main(int argc, char** argv)
 
 	int n = 0;
 	int h = 0;
-	
-	int children_pid[n];
 
 	if(sscanf(argv[1],"%d",&n) != 1) {
 		usage();
@@ -251,23 +243,37 @@ int main(int argc, char** argv)
 		usage();
 		return EXIT_FAILURE;
 	}
+
+	int children_pid[n];
 	
 	fprintf(stdout,"n: %d \n",n);
 	fprintf(stdout,"h: %d \n",h);
-	
-	sigset_t mask;	
-	sigemptyset(&mask);
-	sigaddset(&mask,SIGUSR1);
-	sigaddset(&mask,SIGUSR2);
-	sigaddset(&mask,SIGCHLD);
-	sigprocmask(SIG_BLOCK,&mask,NULL);
-	
+
 	children_count = n;
-	sethandler(sigchld_handler, SIGCHLD);
-	sethandler(SIG_IGN, SIGINT);
+	
+	if(sethandler(sigusr_handler, SIGUSR1) < 0)
+	{
+		kill(0, SIGKILL);
+	}
+	if(sethandler(sigusr_handler, SIGUSR2) < 0)
+	{
+		kill(0, SIGKILL);
+	}
+
+	if(sethandler(sigchld_handler, SIGCHLD) < 0 )
+	{
+		kill(0,SIGKILL);
+	}
+
+	if(sethandler(SIG_IGN, SIGINT) < 0)
+	{
+		kill(0,SIGKILL);
+	}
 	
 	int level = 0;
 	create_children(n, h, level, children_pid);
+
+	while (TEMP_FAILURE_RETRY(wait(NULL)) > 0);
 	
 	return EXIT_SUCCESS;
 }

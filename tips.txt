@@ -1,0 +1,24 @@
+// lecture 1
+// p47
+sigset_t
+mask, oldmask;
+sigemptyset
+(&mask);
+sigaddset
+(&mask, SIGUSR1);
+sigprocmask
+(SIG_BLOCK, &mask, &oldmask);
+...
+while
+(!usr_interrupt)
+	sigsuspend
+(&oldmask);
+sigprocmask
+(SIG_UNBLOCK, &mask, NULL);
+
+
+// without Blocking SIGUSR1,
+the usr_interrupt variable might change between while loop
+and thus be handled by signal handler before reaching sigsuspends
+
+********************************************************

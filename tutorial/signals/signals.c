@@ -157,8 +157,9 @@ int main(int argc, char** argv)
 		return EXIT_FAILURE;
 	}
 	
-	create_children(n,l);
-	
+	// important to ignore signals
+	// so that children wont receive them
+	// before seting their handlers
 	if(sethandler(SIG_IGN,SIGUSR1)) {
 		perror("Seting parent SIGUSR1:");
 		exit(EXIT_FAILURE);
@@ -168,6 +169,7 @@ int main(int argc, char** argv)
 		perror("Seting parent SIGUSR2:");
 		exit(EXIT_FAILURE);
 	}
+
 	
 	// SIGCHLD is sent to parent if child terminated
 	if(sethandler(sigchld_handler, SIGCHLD)) {
@@ -175,7 +177,10 @@ int main(int argc, char** argv)
 		exit(EXIT_FAILURE);
 	}
 
-	
+	create_children(n,l);
+
+
+	parent_work(k, p);
 
 	return EXIT_SUCCESS;
 
