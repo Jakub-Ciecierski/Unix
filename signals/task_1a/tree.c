@@ -40,6 +40,9 @@ the application from running.
 #include <unistd.h>
 #include <string.h>
 #include <sys/wait.h>
+#define ERR(source) (fprintf(stderr,"%s:%d\n",__FILE__,__LINE__),\
+                     perror(source),kill(0,SIGKILL),\
+		     		     exit(EXIT_FAILURE))
 
 volatile sig_atomic_t last_signal = 0;
 
@@ -58,8 +61,16 @@ int sethandler( void (*f)(int), int sigNo) {
 void sigchld_handler(int sig)
 {
 	last_signal = sig;
-	while(waitpid(0, NULL, WNOHANG) > 0)
+	pid_t pid;
+	for(;;){
+		pid=waitpid(0, NULL, WNOHANG);
+		if(0==pid) return;
+		if(0>pid) {
+			if(ECHILD==errno) return;
+			ERR("waitpid:");
+		}
 		children_count--;
+	}
 }
 
 void sigusr_handler(int sig)
@@ -85,16 +96,12 @@ void root_node_work(int* children_pid, int n)
 		for(i = 0; i < n; i++)
 		{
 			if(current_signal == 0) {
-				if(kill(children_pid[i], SIGUSR1) < 0)
-					if(errno == ESRCH) // allow ESRCH
-						fprintf(stderr,"kill() error: %d \n",children_pid[i]);
-				fprintf(stdout,"R[%d] Sending SIGUSR1 \n",getpid());
+				kill(children_pid[i], SIGUSR1) // allow ESRCH
+				fprintf(stderr,"R[%d] Sending SIGUSR1 \n",getpid());
 			}
 			if(current_signal == 1) {
-				if(kill(children_pid[i], SIGUSR2) < 0)
-					if(errno == ESRCH) // allow ESRCH
-						fprintf(stderr,"kill() error: %d \n",children_pid[i]);
-				fprintf(stdout,"R[%d] Sending SIGUSR2 \n",getpid());
+				if(kill(children_pid[i], SIGUSR2) < 0) // allow ESRCH
+				fprintf(stderr,"R[%d] Sending SIGUSR2 \n",getpid());
 			}
 		}
 		if(current_signal == 0)
@@ -200,8 +207,7 @@ void create_children(int n,int h, int level, int* children_pid)
 					create_children(n, h, level + 1, children_pid);
 					return;
 				case -1:
-					error("fork()\n");
-					kill(0, SIGKILL);
+					ERR("fork()");
 			}
 			children_pid[i] = pid;
 		}
@@ -251,24 +257,10 @@ int main(int argc, char** argv)
 
 	children_count = n;
 	
-	if(sethandler(sigusr_handler, SIGUSR1) < 0)
-	{
-		kill(0, SIGKILL);
-	}
-	if(sethandler(sigusr_handler, SIGUSR2) < 0)
-	{
-		kill(0, SIGKILL);
-	}
-
-	if(sethandler(sigchld_handler, SIGCHLD) < 0 )
-	{
-		kill(0,SIGKILL);
-	}
-
-	if(sethandler(SIG_IGN, SIGINT) < 0)
-	{
-		kill(0,SIGKILL);
-	}
+	if(sethandler(sigusr_handler, SIGUSR1) < 0) ERR("sethandler");
+	if(sethandler(sigusr_handler, SIGUSR2) < 0) ERR("sethandler");
+	if(sethandler(sigchld_handler, SIGCHLD) < 0 ) ERR("sethandler");
+	if(sethandler(SIG_IGN, SIGINT) < 0) ERR("sethandler");
 	
 	int level = 0;
 	create_children(n, h, level, children_pid);

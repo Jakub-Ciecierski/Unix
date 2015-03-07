@@ -51,7 +51,6 @@ int setaction( void (*f)(int, siginfo_t *, void *), int sigNo) {
 	return 0;
 }
 
-
 void sigrtmin_handler(int sig, siginfo_t *si, void *c)
 {
 	fprintf(stdout,"Received k: %d from[%d]\n",si->si_int, si->si_pid);
