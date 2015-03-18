@@ -1,0 +1,646 @@
+FIFO
+							      Marcin Borkowski
+				marcinbo (at) mini (dot) pw (dot) edu (dot) pl
+------------------------------------------------------------------------------
+
+Task:
+
+Write a client-server application. The communication between clients and the
+server must be organized by a single FIFO.  The server receives binary data in
+packages and filters out non-alphanumerical characters. The results of server
+work are to be appended to the file PID.txt where PID is the pid of the client
+that sent them. Please note that the clients can send data simultaneously. The
+client reads a file pointed to it as a parameter and sends it through a FIFO to
+the server. PID files are to be stored in server working directory. The name
+(with path) of fifo file is a parameter to both client and SERVER.  All I/O
+operation are to be performed with low level functions  (open, read, write and
+close).
+
+The client terminates right after it sends the last part of the file. The
+server terminates as soon as all of its clients terminate (no one writes to fifo).
+Both programs should recognize broken pipe condition.
+
+Solution layout of the server program:
+1.Create and open fifo
+2.Read data in packages (permissions PIPE_BUF long - atomicity)
+3.If fifo is closed 
+4.Extract PID from package
+5.Open or create proper PID file, append data and close the file 
+6.If reading is still possible from fifo go to 2
+7.Remove fifo
+
+Solution layout of the client program:
+1.Create and open fifo
+2.Open file to send
+3.Read a part of file add pid information and send it to fifo
+4.As long as there is something left in the file go to 3
+5.Close the file
+
+First Stage of solution:
+
+1.Prepare make file to compile two separate programs
+2.Make simplified server program that will create fifo and print everything it 
+receives on the screen. Use cat command to send something to the server.
+==================================================================================
+---Makefile-----------------------------------------------------------------------
+all: client server
+client: client.c	
+	gcc -Wall -o client client.c
+server: server.c	
+	gcc -Wall -o server server.c
+.PHONY: clean
+clean:
+	rm client server
+----------------------------------------------------------------------------------
+---server.c-----------------------------------------------------------------------
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+void usage(void){
+	fprintf(stderr,"USAGE: server fifo_file\n");
+}
+
+void read_from_fifo(int fifo){
+	ssize_t count;
+	char c;
+	do{
+		count=TEMP_FAILURE_RETRY(read(fifo,&c,1));
+		if(count<0){
+			perror("Read:");
+			exit(EXIT_FAILURE);
+		}
+		if(count>0){
+			if(TEMP_FAILURE_RETRY(write(STDOUT_FILENO,&c,1))<0){
+			perror("Write:");
+			exit(EXIT_FAILURE);
+			}
+		}
+	}while(count>0);
+}
+
+int main(int argc, char** argv) {
+	int fifo;
+	if(argc!=2) {
+		usage();
+		return EXIT_FAILURE;
+	}
+
+	if(mkfifo(argv[1], S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP)<0)
+		if(errno!=EEXIST){
+			perror("Create fifo:");
+			exit(EXIT_FAILURE);
+		}
+	if((fifo=TEMP_FAILURE_RETRY(open(argv[1],O_RDONLY)))<0){
+			perror("Open fifo:");
+			exit(EXIT_FAILURE);
+	}
+	read_from_fifo(fifo);	
+	if(TEMP_FAILURE_RETRY(close(fifo))<0){
+			perror("Close fifo:");
+			exit(EXIT_FAILURE);
+	}
+	return EXIT_SUCCESS;
+}
+----------------------------------------------------------------------------------
+Compile: make server
+Run: ./server a & sleep 1; cat server.c > a
+
+Why effective permissions of fifo are different from the selected ? What umask
+does ?
+
+Second Stage: Write a simplified client program that will send a file to the
+fifo in blocks of PIPE_BUF bytes. Make sure all blocks have the same size.
+==================================================================================
+---client.c-----------------------------------------------------------------------
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <string.h>
+
+void usage(void){
+	fprintf(stderr,"USAGE: client fifo_file file \n");
+}
+
+int64_t bulk_read(int fd, char *buf, size_t count){
+	int c;
+	size_t len=0;
+	do{
+		c=TEMP_FAILURE_RETRY(read(fd,buf,count));
+		if(c<0) return c;
+		if(c==0) return len; //EOF
+		buf+=c;
+		len+=c;
+		count-=c;
+	}while(count>0);
+	return len ;
+}
+
+int64_t bulk_write(int fd, char *buf, size_t count){
+	int c;
+	size_t len=0;
+	do{
+		c=TEMP_FAILURE_RETRY(write(fd,buf,count));
+		if(c<0) return c;
+		buf+=c;
+		len+=c;
+		count-=c;
+	}while(count>0);
+	return len ;
+}
+
+void write_to_fifo(int fifo, int file){
+	int64_t count;
+	char buf[PIPE_BUF];
+	do{
+		count=bulk_read(file,buf,PIPE_BUF);
+		if(count<0){
+			perror("Read:");
+			exit(EXIT_FAILURE);
+		}
+		if(count < PIPE_BUF) memset(buf+count,0,PIPE_BUF-count);
+		if(count>0){
+			if(bulk_write(fifo,buf,PIPE_BUF)<0){
+			perror("Write:");
+			exit(EXIT_FAILURE);
+			}
+		}
+	}while(count==PIPE_BUF);
+}
+
+int main(int argc, char** argv) {
+	int fifo,file;
+	if(argc!=3) {
+		usage();
+		return EXIT_FAILURE;
+	}
+
+	if(mkfifo(argv[1], S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP)<0)
+		if(errno!=EEXIST){
+			perror("Create fifo:");
+			exit(EXIT_FAILURE);
+		}
+	if((fifo=TEMP_FAILURE_RETRY(open(argv[1],O_WRONLY)))<0){
+			perror("Open fifo:");
+			exit(EXIT_FAILURE);
+	}
+	if((file=TEMP_FAILURE_RETRY(open(argv[2],O_RDONLY)))<0){
+			perror("Open file:");
+			exit(EXIT_FAILURE);
+	}
+	write_to_fifo(fifo,file);	
+	if(TEMP_FAILURE_RETRY(close(file))<0){
+			perror("Close file:");
+			exit(EXIT_FAILURE);
+	}
+	if(TEMP_FAILURE_RETRY(close(fifo))<0){
+			perror("Close fifo:");
+			exit(EXIT_FAILURE);
+	}
+	return EXIT_SUCCESS;
+}
+----------------------------------------------------------------------------------
+Run: ./server a& ./client a client.c
+
+Third stage:
+
+1.Add information about sender pid to the data send through pipe
+2.Print data from fifo in blocks marked with sender PID, remove non-alphanumerical 
+characters
+==================================================================================
+---client.c-----------------------------------------------------------------------
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <string.h>
+#define MSG_SIZE (PIPE_BUF - sizeof(pid_t))
+
+void usage(void){
+	fprintf(stderr,"USAGE: client fifo_file file \n");
+}
+
+int64_t  bulk_read(int fd, char *buf, size_t count){
+	int c;
+	size_t len=0;
+	do{
+		c=TEMP_FAILURE_RETRY(read(fd,buf,count));
+		if(c<0) return c;
+		if(c==0) return len; //EOF
+		buf+=c;
+		len+=c;
+		count-=c;
+	}while(count>0);
+	return len ;
+}
+
+int64_t  bulk_write(int fd, char *buf, size_t count){
+	int c;
+	size_t len=0;
+	do{
+		c=TEMP_FAILURE_RETRY(write(fd,buf,count));
+		if(c<0) return c;
+		buf+=c;
+		len+=c;
+		count-=c;
+	}while(count>0);
+	return len ;
+}
+
+void write_to_fifo(int fifo, int file){
+	int64_t  count;
+	char buffer[PIPE_BUF];
+	char *buf;
+	*((pid_t *)buffer)=getpid();
+	buf=buffer+sizeof(pid_t);
+	
+	do{
+		count=bulk_read(file,buf,MSG_SIZE);
+		if(count<0){
+			perror("Read:");
+			exit(EXIT_FAILURE);
+		}
+		if(count < MSG_SIZE) memset(buf+count,0,MSG_SIZE-count);
+		if(count>0){
+			if(bulk_write(fifo,buffer,PIPE_BUF)<0){
+			perror("Write:");
+			exit(EXIT_FAILURE);
+			}
+		}
+	}while(count==MSG_SIZE);
+}
+
+int main(int argc, char** argv) {
+	int fifo,file;
+	if(argc!=3) {
+		usage();
+		return EXIT_FAILURE;
+	}
+
+	if(mkfifo(argv[1], S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP)<0)
+		if(errno!=EEXIST){
+			perror("Create fifo:");
+			exit(EXIT_FAILURE);
+		}
+	if((fifo=TEMP_FAILURE_RETRY(open(argv[1],O_WRONLY)))<0){
+			perror("Open fifo:");
+			exit(EXIT_FAILURE);
+	}
+	if((file=TEMP_FAILURE_RETRY(open(argv[2],O_RDONLY)))<0){
+			perror("Open file:");
+			exit(EXIT_FAILURE);
+	}
+	write_to_fifo(fifo,file);	
+	if(TEMP_FAILURE_RETRY(close(file))<0){
+			perror("Close file:");
+			exit(EXIT_FAILURE);
+	}
+	if(TEMP_FAILURE_RETRY(close(fifo))<0){
+			perror("Close fifo:");
+			exit(EXIT_FAILURE);
+	}
+	return EXIT_SUCCESS;
+}
+----------------------------------------------------------------------------------
+---server.c-----------------------------------------------------------------------
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <ctype.h>
+
+void usage(void){
+	fprintf(stderr,"USAGE: server fifo_file\n");
+}
+
+int64_t  bulk_read(int fd, char *buf, size_t count){
+	int c;
+	size_t len=0;
+	do{
+		c=TEMP_FAILURE_RETRY(read(fd,buf,count));
+		if(c<0) return c;
+		if(c==0) return len; //EOF
+		buf+=c;
+		len+=c;
+		count-=c;
+	}while(count>0);
+	return len ;
+}
+
+void read_from_fifo(int fifo){
+	int64_t  count, i;
+	char buffer[PIPE_BUF];
+	do{
+		count=bulk_read(fifo,buffer,PIPE_BUF);
+		if(count<0){
+			perror("Read:");
+			exit(EXIT_FAILURE);
+		}
+		if(count>0){
+			printf("\nPID:%d-------------------------------------\n",*((pid_t*)buffer)); //this is not low level IO
+			for(i=sizeof(pid_t);i<PIPE_BUF;i++)
+				if(isalnum(buffer[i]))
+						if(TEMP_FAILURE_RETRY(write(STDOUT_FILENO,buffer+i,1))<0){
+						perror("Write:");
+						exit(EXIT_FAILURE);
+						}
+		}
+	}while(count==PIPE_BUF);
+}
+
+int main(int argc, char** argv) {
+	int fifo;
+	if(argc!=2) {
+		usage();
+		return EXIT_FAILURE;
+	}
+
+	if(mkfifo(argv[1], S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP)<0)
+		if(errno!=EEXIST){
+			perror("Create fifo:");
+			exit(EXIT_FAILURE);
+		}
+	if((fifo=TEMP_FAILURE_RETRY(open(argv[1],O_RDONLY)))<0){
+			perror("Open fifo:");
+			exit(EXIT_FAILURE);
+	}
+	read_from_fifo(fifo);	
+	if(TEMP_FAILURE_RETRY(close(fifo))<0){
+			perror("Close fifo:");
+			exit(EXIT_FAILURE);
+	}
+	return EXIT_SUCCESS;
+}
+----------------------------------------------------------------------------------
+Run:  ./client a Makefile& ./client a server.c& ./client a client.c& sleep 1 ;./server a
+
+The last stage
+
+1.Append the data read from fifo to the PID files, try to avoid writing it char
+by char
+2.Remove fifo before server terminates
+3.Add checking for broken pipe 
+==================================================================================
+---server.c-----------------------------------------------------------------------
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <ctype.h>
+#define MSG_SIZE (PIPE_BUF - sizeof(pid_t))
+
+void usage(void){
+	fprintf(stderr,"USAGE: server fifo_file\n");
+}
+
+int64_t  bulk_read(int fd, char *buf, size_t count){
+	int c;
+	size_t len=0;
+	do{
+		c=TEMP_FAILURE_RETRY(read(fd,buf,count));
+		if(c<0) return c;
+		if(c==0) return len; //EOF
+		buf+=c;
+		len+=c;
+		count-=c;
+	}while(count>0);
+	return len ;
+}
+
+int64_t  bulk_write(int fd, char *buf, size_t count){
+	int c;
+	size_t len=0;
+	do{
+		c=TEMP_FAILURE_RETRY(write(fd,buf,count));
+		if(c<0) return c;
+		buf+=c;
+		len+=c;
+		count-=c;
+	}while(count>0);
+	return len ;
+}
+
+size_t filter_buffer(char* buf, int len) {
+	size_t i,j;
+	for(i=j=0;i<len;i++)
+		if(isalnum(buf[i])) buf[j++]=buf[i];
+	return j;
+}
+
+void append_to_file (char *filename,char *buf, size_t len){
+	int fd;
+	if((fd=TEMP_FAILURE_RETRY(open(filename,O_WRONLY|O_APPEND|O_CREAT,S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP)))<0){
+			perror("Open file:");
+			exit(EXIT_FAILURE);
+	}
+	if(bulk_write(fd,buf,len)<0){
+		perror("Write:");
+		exit(EXIT_FAILURE);
+	}
+	if(TEMP_FAILURE_RETRY(close(fd))<0){
+			perror("Close file:");
+			exit(EXIT_FAILURE);
+	}
+}
+
+void read_from_fifo(int fifo){
+	int64_t  count, i;
+	char buffer[PIPE_BUF];
+	char fname[20];
+	do{
+		count=bulk_read(fifo,buffer,PIPE_BUF);
+		if(count<0){
+			perror("Read:");
+			exit(EXIT_FAILURE);
+		}
+		if(count>0){
+			snprintf(fname,20,"%d.txt",*((pid_t*)buffer));
+			i=filter_buffer(buffer+sizeof(pid_t),MSG_SIZE);
+			append_to_file(fname,buffer+sizeof(pid_t),i);
+		}
+	}while(count==PIPE_BUF);
+}
+
+int main(int argc, char** argv) {
+	int fifo;
+	if(argc!=2) {
+		usage();
+		return EXIT_FAILURE;
+	}
+
+	if(mkfifo(argv[1], S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP)<0)
+		if(errno!=EEXIST){
+			perror("Create fifo:");
+			exit(EXIT_FAILURE);
+		}
+	if((fifo=TEMP_FAILURE_RETRY(open(argv[1],O_RDONLY)))<0){
+			perror("Open fifo:");
+			exit(EXIT_FAILURE);
+	}
+	read_from_fifo(fifo);	
+	if(TEMP_FAILURE_RETRY(close(fifo))<0){
+			perror("Close fifo:");
+			exit(EXIT_FAILURE);
+	}
+	if(unlink(argv[1])<0){
+			perror("Remove fifo:");
+			exit(EXIT_FAILURE);
+	}
+	return EXIT_SUCCESS;
+}
+----------------------------------------------------------------------------------
+---client.c-----------------------------------------------------------------------
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <signal.h>
+#include <string.h>
+#define MSG_SIZE (PIPE_BUF - sizeof(pid_t))
+
+void usage(void){
+	fprintf(stderr,"USAGE: client fifo_file file \n");
+}
+
+int sethandler( void (*f)(int), int sigNo) {
+	struct sigaction act;
+	memset(&act, 0, sizeof(struct sigaction));
+	act.sa_handler = f;
+	if (-1==sigaction(sigNo, &act, NULL))
+		return -1;
+	return 0;
+}
+
+void pipe_handler(int sig) {
+	printf("[%d] received SIGPIPE and must terminate.\n", getpid());
+}
+
+int64_t  bulk_read(int fd, char *buf, size_t count){
+	int c;
+	size_t len=0;
+	do{
+		c=TEMP_FAILURE_RETRY(read(fd,buf,count));
+		if(c<0) return c;
+		if(c==0) return len; //EOF
+		buf+=c;
+		len+=c;
+		count-=c;
+	}while(count>0);
+	return len ;
+}
+
+int64_t  bulk_write(int fd, char *buf, size_t count){
+	int c;
+	size_t len=0;
+	do{
+		c=TEMP_FAILURE_RETRY(write(fd,buf,count));
+		if(c<0) return c;
+		buf+=c;
+		len+=c;
+		count-=c;
+	}while(count>0);
+	return len ;
+}
+
+void write_to_fifo(int fifo, int file){
+	int64_t  count;
+	char buffer[PIPE_BUF];
+	char *buf;
+	*((pid_t *)buffer)=getpid();
+	buf=buffer+sizeof(pid_t);
+	
+	do{
+		count=bulk_read(file,buf,MSG_SIZE);
+		if(count<0){
+			perror("Read:");
+			exit(EXIT_FAILURE);
+		}
+		if(count < MSG_SIZE) memset(buf+count,0,MSG_SIZE-count);
+		if(count>0){
+			if(bulk_write(fifo,buffer,PIPE_BUF)<0){
+			perror("Write:");
+			exit(EXIT_FAILURE);
+			}
+		}
+	}while(count==MSG_SIZE);
+}
+
+int main(int argc, char** argv) {
+	int fifo,file;
+	if(argc!=3) {
+		usage();
+		return EXIT_FAILURE;
+	}
+
+	if(mkfifo(argv[1], S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP)<0)
+		if(errno!=EEXIST){
+			perror("Create fifo:");
+			exit(EXIT_FAILURE);
+		}
+	if((fifo=TEMP_FAILURE_RETRY(open(argv[1],O_WRONLY)))<0){
+			perror("Open fifo:");
+			exit(EXIT_FAILURE);
+	}
+	if((file=TEMP_FAILURE_RETRY(open(argv[2],O_RDONLY)))<0){
+			perror("Open file:");
+			exit(EXIT_FAILURE);
+	}
+	if(sethandler(pipe_handler,SIGPIPE)) {
+		perror("Seting SIGPIPE:");
+		exit(EXIT_FAILURE);
+	}
+	write_to_fifo(fifo,file);	
+	if(TEMP_FAILURE_RETRY(close(file))<0){
+			perror("Close file:");
+			exit(EXIT_FAILURE);
+	}
+	if(TEMP_FAILURE_RETRY(close(fifo))<0){
+			perror("Close fifo:");
+			exit(EXIT_FAILURE);
+	}
+	return EXIT_SUCCESS;
+}
+----------------------------------------------------------------------------------
+Do we need SIGPIPE handler in server ?
+
+Homework suggestions:
+
+1.Many function are repeated in server and client (also in previous tutorials),
+make a library for them.
+2.Instead of appending to the PID.txt file write the block at the beginning. 
+It can be done in two ways:
+	a: in client read a file from the end to beginning
+	b: every time you add a new block to PID file rewrite existing content
+3.Move character filtering from server to the client and send blocks of various 
+size.
