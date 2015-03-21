@@ -1,0 +1,27 @@
+Interprocess pipe communication.
+
+Parent process creates n child processes and a pipe. 
+
+Opens a file pointed by second parameter f and sends 
+it's content to pipe in parts. 
+
+After all data is sent parent process must close the 
+pipe and wait for child processes to terminate before it exits.
+
+If sending to pipe becomes impossible (exceptional condition, SIGPIPE)
+the process should still close the pipe and wait for child processes.
+
+Child process works in cycles as long as there is a chance
+to read data from the pipe. First it sleeps random time <0-9>s. 
+then it reads one part of data from the pipe. 
+
+All data received should be printed on stdout with PID of child process.
+
+Parent process can be stopped by SIGINT (C-c).
+After signal delivery the process must finish 
+sending current block, close the pipe and 
+wait for child processes to terminate normally. 
+Child processes must ignore SIGINT.
+
+If any of (n,f) parameters is not supplied, 
+program should print usage information and exit.

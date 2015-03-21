@@ -52,7 +52,7 @@ int64_t  bulk_write(int fd, char *buf, size_t count){
 		len+=c;
 		count-=c;
 	}while(count>0);
-	return len ;
+	return len;
 }
 
 void write_to_fifo(int fifo, int file){
@@ -70,6 +70,9 @@ void write_to_fifo(int fifo, int file){
 		}
 		if(count < MSG_SIZE) memset(buf+count,0,MSG_SIZE-count);
 		if(count>0){
+			// bulk_write is actually not needed
+			// becouse writing to fifo with less or equal to
+			// PIPE_BUF is atomix
 			if(bulk_write(fifo,buffer,PIPE_BUF)<0){
 			perror("Write:");
 			exit(EXIT_FAILURE);
