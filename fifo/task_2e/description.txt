@@ -1,0 +1,26 @@
+
+FIFO roulette
+
+Write two single process programmes, one will act as 
+game master and another will play the game.
+
+There can be only one instance of the game master, 
+it must create the fifo file at the start and remove 
+it at the end of the programme. 
+
+The game master reads the bets (PID,NUMBER[1-5]) 
+from the fifo and as soon as it collects 3 bets 
+random number [1-5] is selected.
+
+If any of the processes has the same winning number game master 
+sends SIGUSR1 (win) to it, otherwise SIGUSR2 (lose). 
+After that, game master awaits new bets. 
+It does not terminate on EOF condition on fifo, it stops only for C-c.
+
+There can be any number of player instances. 
+The player sends its bet (PID,NUMBER[1-5]) via 
+fifo and awaits signal. On SIGUSR1 it prints WIN, 
+on SIGUSR2 (lose) and exits. If the response is 
+not received within 10s player exits with TIMEOUT message.
+
+Both programs require fifo name as sole parameter.

@@ -1,0 +1,16 @@
+One parent and ten children. In a loop (until there are any children):
+
+parent selects (randomly) some positive number,
+each child selects (randomly) some positive number and sends it to the parent,
+
+the child that sent the value closest to the parent's value "wins",
+
+parent sends to all children the information which child (PID)
+is the winner of that round,
+
+winner prints its PID and exits. 
+
+Parent communicates with its children using two 
+(and only two!) shared pipes. No other means for 
+interprocess communication (signals, message queues,
+files etc) can be used! 
