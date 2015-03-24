@@ -60,6 +60,7 @@ void write_to_fifo(int fifo, int file){
 	char buffer[PIPE_BUF];
 	char *buf;
 	*((pid_t *)buffer)=getpid();
+
 	buf=buffer+sizeof(pid_t); // Why not buffer+=sizeof(pid_t)
 	
 	do{
