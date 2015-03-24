@@ -39,8 +39,6 @@ void sigchld_handler(int sig)
 			terr_count--;
 			fprintf(stderr,"child count: %d \n", terr_count);	
 		}
-		
-		
 	}
 }
 
@@ -95,6 +93,66 @@ void sapper_work()
 	fprintf(stderr,"[%d] S. My parent: %d \n", getpid(), getppid());
 }
 
+void main_work()
+{
+	// unblock just SIGCHLD
+	sigset_t child_mask;
+	sigemptyset(&child_mask);
+	sigaddset(&child_mask,SIGCHLD);
+	sigprocmask(SIG_UNBLOCK,&child_mask,NULL);
+	
+	// Main
+	while(1)
+	{	
+		pause();
+		if(terr_count == 0) {
+			fprintf(stderr,"KILLING \n");
+			kill(0, SIGKILL);
+			exit(EXIT_SUCCESS);
+		}
+	}
+}
+
+void create_terrorist(int n)
+{
+	// Creating Terrorists
+	int i = 0;
+	for(i = 0; i < n; i++)
+	{
+		pid_t pid = fork();
+		if(pid == 0) {
+			srand(getpid());
+			int s =  rand()%(SIGRTMAX - SIGRTMIN +1) + (SIGRTMIN);
+
+			if(sethandler(sigrt_handler, s) < 0)
+				ERR("sethandler()");
+
+			sigset_t mask;
+			sigemptyset(&mask);
+			sigaddset(&mask,s);
+			sigprocmask(SIG_UNBLOCK,&mask,NULL);
+
+			terrorist_work(s);
+			exit(EXIT_SUCCESS);
+		}
+		if(pid < 0 )
+			ERR("fork())");		
+	}
+}
+
+void create_sapper()
+{
+	// Creating Sapper
+	switch(fork())
+	{
+		case 0:
+			sapper_work();
+			exit(EXIT_SUCCESS);
+		case -1:
+			ERR("fork())");
+	}
+}
+
 void usage()
 {
 	fprintf(stderr,"main n \n");
@@ -131,57 +189,12 @@ int main(int argc, char** argv)
 	}
 	sigprocmask(SIG_BLOCK,&mask,&old_mask);
 	
-	// Creating Terrorists
-	for(i = 0; i < n; i++)
-	{
-		pid_t pid = fork();
-		if(pid == 0) {
-			srand(getpid());
-			int s = rand()%(SIGRTMIN) + (SIGRTMAX - SIGRTMIN);
-
-			if(sethandler(sigrt_handler, s) < 0)
-				ERR("sethandler()");
-
-			sigset_t tmask;
-			sigemptyset(&tmask);
-			sigaddset(&tmask,s);
-			sigprocmask(SIG_UNBLOCK,&tmask,NULL);
-
-			terrorist_work(s);
-			exit(EXIT_SUCCESS);
-		}
-		if(pid < 0 )
-			ERR("fork())");
-			
-	}
-
-	// Creating Sapper
-	switch(fork())
-	{
-		case 0:
-			sapper_work();
-			exit(EXIT_SUCCESS);
-		case -1:
-			ERR("fork())");
-	}
+	create_terrorist(n);
 	
-	// unblock just SIGCHLD
-	sigset_t child_mask;
-	sigemptyset(&child_mask);
-	sigaddset(&child_mask,SIGCHLD);
-	sigprocmask(SIG_UNBLOCK,&child_mask,NULL);
-	
-	// Main
-	while(1)
-	{	
-		pause();
-		if(terr_count == 0) {
-			fprintf(stderr,"KILLING \n");
-			kill(0, SIGKILL);
-			exit(EXIT_SUCCESS);
-		}
-	}
-	
+	create_sapper();
+
+	main_work();
+
 	while (TEMP_FAILURE_RETRY(wait(NULL)) > 0);
 	
 	exit(EXIT_SUCCESS);
