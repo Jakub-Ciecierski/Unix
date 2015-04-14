@@ -103,8 +103,8 @@ void parent_work(int pipeA[], int pipeB[])
 	fprintf(stderr,"[%d] Parent work\n" , getpid());
 		
 	// close write end of pipes
-	TEMP_FAILURE_RETRY(close(pipeA[1]));
-	TEMP_FAILURE_RETRY(close(pipeB[1]));
+	if(TEMP_FAILURE_RETRY(close(pipeA[1])) <0 ) ERR("close");
+	if(TEMP_FAILURE_RETRY(close(pipeB[1])) <0 ) ERR("close");
 	
 	char bufferA[PIPE_BUF];
 	char bufferB[PIPE_BUF];
@@ -124,8 +124,8 @@ void parent_work(int pipeA[], int pipeB[])
 	}while(countA!=0 || countB!=0); // while the pipe is open on write ends
 	
 	// close write end of pipes
-	TEMP_FAILURE_RETRY(close(pipeA[0]));
-	TEMP_FAILURE_RETRY(close(pipeB[0]));
+	if(TEMP_FAILURE_RETRY(close(pipeA[0])) <0 ) ERR("close");
+	if(TEMP_FAILURE_RETRY(close(pipeB[0])) <0 ) ERR("close");
 }
 
 void create_children(int n, char** argv)
@@ -150,11 +150,11 @@ void create_children(int n, char** argv)
 				usage();
 				kill(0, SIGKILL);
 			}
-			TEMP_FAILURE_RETRY(close(pipeA[0]));
-			TEMP_FAILURE_RETRY(close(pipeB[0]));
+			if(TEMP_FAILURE_RETRY(close(pipeA[0])) <0 ) ERR("close");
+			if(TEMP_FAILURE_RETRY(close(pipeB[0])) <0 ) ERR("close");
 			child_work(i+1, num, pipeA, pipeB);
-			TEMP_FAILURE_RETRY(close(pipeA[1]));
-			TEMP_FAILURE_RETRY(close(pipeB[1]));
+			if(TEMP_FAILURE_RETRY(close(pipeA[1])) <0 ) ERR("close");
+			if(TEMP_FAILURE_RETRY(close(pipeB[1])) <0 ) ERR("close");
 			exit(EXIT_SUCCESS);
 		}
 		if(pid < 0)
