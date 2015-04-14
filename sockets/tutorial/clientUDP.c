@@ -25,14 +25,16 @@ void client_udp_work(int fd, int32_t data[], struct sockaddr_in addr)
 {
 	fprintf(stderr,"[UDP] sending data \n");
 	if(TEMP_FAILURE_RETRY(sendto(fd,(char *)data,
-			sizeof(int32_t[5]),0,&addr,sizeof(addr)))<0 && 
+			sizeof(int32_t[5]),0,(struct sockaddr*)&addr,sizeof(addr)))<0 && 
 				errno!=EPIPE && errno!=ECONNRESET)
 		ERR("sendto:");
 		
 	alarm(1);
 	
 	fprintf(stderr,"[UDP] waiting for response \n");
-	while(recv(fd,(char *)data,sizeof(int32_t[5]),0)<0){
+	socklen_t len = sizeof(struct sockaddr_in);
+	while(recvfrom(fd,(char *)data,sizeof(int32_t[5]),0,
+			(struct sockaddr*)&addr,&len)<0){
 		if(EINTR!=errno && errno!=EPIPE && errno!=ECONNRESET)ERR("recv:");
 		if(SIGALRM==last_signal) {
 			fprintf(stderr,"[UDP] timeout reached... \n");

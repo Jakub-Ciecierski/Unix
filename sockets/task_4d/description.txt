@@ -1,0 +1,18 @@
+Server programme accepts number of TCP clients (less than FD_SETSIZE). 
+Each client at any time can send positive 
+(excluding zero) integer to the server.
+
+If server have 2 clients with the same number both are disconnected.
+If client sends multiple numbers only the last one 
+is remembered on the server.
+
+Any data that is not in form of positive integer 
+(as text) should be ignored. 
+
+Server is a single process programme.
+
+Server program can be interrupted by C-c (SIGINT) at any time
+
+Server takes port number as its sole argument.
+
+Telnet will be used as client program e.g.: telnet localhost 2000 
