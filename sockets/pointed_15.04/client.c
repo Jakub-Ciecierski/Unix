@@ -45,6 +45,7 @@ void communicate(int fd, struct sockaddr_in addr, int32_t* n)
 					(struct sockaddr*)&addr,sizeof(addr))<0)
 	{
 		if(EINTR!=errno && errno!=EPIPE && errno!=ECONNRESET)ERR("sendto:");
+		if(errno==EPIPE || errno==ECONNRESET) break;
 		if(SIGALRM==last_signal) {
 			fprintf(stderr,"[Client] timeout reached... \n");
 			return;
@@ -59,6 +60,7 @@ void communicate(int fd, struct sockaddr_in addr, int32_t* n)
 					(struct sockaddr*)&addr,&len)<0)
 	{
 		if(EINTR!=errno && errno!=EPIPE && errno!=ECONNRESET)ERR("recvfrom:");
+		if(errno==EPIPE || errno==ECONNRESET) break;
 		if(SIGALRM==last_signal) {
 			fprintf(stderr,"[Client] timeout reached... \n");
 			return;

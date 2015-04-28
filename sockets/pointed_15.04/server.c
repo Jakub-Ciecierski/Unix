@@ -25,69 +25,43 @@ void sig_handler(int sig)
 	do_continue = 0;
 }
 
-int add_new_client(int sfd){
-	int nfd;
-	if((nfd=TEMP_FAILURE_RETRY(accept(sfd,NULL,NULL)))<0) {
-		if(EAGAIN==errno||EWOULDBLOCK==errno) return -1;
-		ERR("accept");
-	}
-	return nfd;
-}
-
 void calculate(int32_t* data)
 {
 	(*data)++;
 }
 
 void communicate(int fd){
+	fprintf(stderr,"[Server] Before recvfrom \n");
 	struct sockaddr_in addr;
 	int32_t data;
 	socklen_t size=sizeof(addr);
-	if(TEMP_FAILURE_RETRY(recvfrom(fd,(char *)&data,
-				sizeof(int32_t),0,&addr,&size))<0 &&
-					errno!=EPIPE && errno!=ECONNRESET) ERR("read:");
+
+	while(recvfrom(fd,(char *)&data, sizeof(int32_t),0,&addr,&size)<0)
+	{
+		if(EINTR!=errno && errno!=EPIPE && errno!=ECONNRESET) ERR("recvfrom:");
+		if(errno==EPIPE || errno==ECONNRESET) break;
+		if(!do_continue) return;
+	}
+
+	fprintf(stderr,"[Server] After recvfrom \n");
 	
 	data = ntohl(data);
 	calculate(&data);
 	data = htonl(data);
 	
-	if(TEMP_FAILURE_RETRY(sendto(fd,(char *)&data,
-				sizeof(int32_t),0,&addr,sizeof(addr)))<0 &&
-					errno!=EPIPE && errno!=ECONNRESET) ERR("write:");
+	while(sendto(fd,(char *)&data,sizeof(int32_t),0,&addr,sizeof(addr))<0)
+	{
+		if(EINTR!=errno && errno!=EPIPE && errno!=ECONNRESET) ERR("recvfrom:");
+		if(errno==EPIPE || errno==ECONNRESET) break;
+		if(!do_continue) return;
+	}		
 }
 
 void server_work(int fdU)
-{
-	int fdmax;
-	fd_set base_rfds, rfds ;
-	sigset_t mask, oldmask;
-	
-	FD_ZERO(&base_rfds);
-	FD_SET(fdU, &base_rfds);
-	
-	fdmax=fdU;
-	
-	sigemptyset (&mask);
-	sigaddset (&mask, SIGINT);
-	sigprocmask (SIG_BLOCK, &mask, &oldmask);
-	
-	fprintf(stderr,"server before main loop \n");
-	
+{	
 	while(do_continue){
-		rfds=base_rfds;
-		fprintf(stderr,"[Server] starting pselect \n");
-		if(pselect(fdmax+1,&rfds,NULL,NULL,NULL,&oldmask)>0){
-			if(FD_ISSET(fdU,&rfds)){
-				fprintf(stderr,"[Server] new udp client \n");
-				communicate(fdU);
-			}
-
-		}else{
-			if(EINTR==errno) continue;
-			ERR("pselect");
-		}
+		communicate(fdU);
 	}
-	sigprocmask (SIG_UNBLOCK, &mask, NULL);
 }
 
 void usage(char * name){
