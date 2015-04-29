@@ -39,7 +39,7 @@ void communicate(int fd){
 	while(recvfrom(fd,(char *)&data, sizeof(int32_t),0,&addr,&size)<0)
 	{
 		if(EINTR!=errno && errno!=EPIPE && errno!=ECONNRESET) ERR("recvfrom:");
-		if(errno==EPIPE || errno==ECONNRESET) break;
+		if(errno==EPIPE || errno==ECONNRESET) return;
 		if(!do_continue) return;
 	}
 
@@ -52,7 +52,7 @@ void communicate(int fd){
 	while(sendto(fd,(char *)&data,sizeof(int32_t),0,&addr,sizeof(addr))<0)
 	{
 		if(EINTR!=errno && errno!=EPIPE && errno!=ECONNRESET) ERR("recvfrom:");
-		if(errno==EPIPE || errno==ECONNRESET) break;
+		if(errno==EPIPE || errno==ECONNRESET) return;
 		if(!do_continue) return;
 	}		
 }
