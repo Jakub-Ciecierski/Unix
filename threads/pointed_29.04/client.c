@@ -20,7 +20,7 @@ void client_work(int fd)
 {
 	char* data = NULL;
 	fprintf(stderr,"[Client] waiting for response \n");
-	if(bulk_read(fd, (char*)data, MSG_SIZE) <0 && errno!=EPIPE)
+	if(bulk_read(fd, (char*)data, MSG_SIZE) <0 )
 		ERR("bulk_write");
 	fprintf(stderr,"[Client] received response \n");
 	fprintf(stdout,"%s \n",data);

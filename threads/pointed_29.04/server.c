@@ -50,7 +50,7 @@ void* thread_func(void* args)
 	memcpy(&targ, args, sizeof(targ));
 	
 	char msg[MSG_SIZE];
-	sprintf(msg, "Limit of %d connections reached, disconnecting", targ.n);
+	snprintf(msg, MSG_SIZE,"Limit of %d connections reached, disconnecting", targ.n);
 	printf("%s \n",msg);
 
 	pthread_cleanup_push(cleanup, (void *) targ.mutex);
