@@ -1,0 +1,5 @@
+Makefile is used to compile the program.
+To build the entire solution type (in this directory):
+make
+
+exe files will be output in bin folder.

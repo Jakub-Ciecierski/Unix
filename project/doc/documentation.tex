@@ -1,0 +1,109 @@
+\documentclass{article}
+
+\usepackage{pdfpages}
+\usepackage{graphicx}
+
+\begin{document}
+
+\vspace*{3ex}
+\begin{flushright}
+{\large 10 May 2015}
+\end{flushright}
+
+\begin{flushleft}
+{\large Jakub Ciecierski\\
+
+}
+\end{flushleft}
+
+\hskip3cm
+
+\begin{center}
+\Large {\bf
+	Unix Programming
+}
+\vskip2ex
+\Large {\bf
+	Time extended game of checkers.
+}
+
+{\bf 
+	Documentation.
+}
+
+\vskip2ex
+
+\vspace{60pt}
+\includegraphics[width=80mm]{images/mini.PNG} \\
+\end{center}
+
+\vskip20ex
+
+\newpage
+
+\section{Project Description}
+Server holds any number of checkers games, clients connect at any time 
+to check current game state and make next move. Server does not validate 
+the moves according to the rules, the only checks server does:
+
+\begin{itemize}
+
+	\item    is it player's turn ?
+	\item    is disc of player colour at the starting position ?
+	\item    is destination position empty or occupied by the opponent piece ? 
+	\item    If empty, just make a move, if occupied, remove opponents disc.
+    
+\end{itemize}
+
+Game is over when one of the players give up 
+(server does not check the terminal rules of checkers game).
+
+{\bf When connected to the game user can:}
+
+\begin{itemize}
+
+	\item display the board
+    \item check game status (active,resolved, waiting for opponent)
+	\item check the turn (mine,opponents)
+	\item list all moves made
+	\item read messages from the opponent
+	\item make move in form of coordinates e.g. b6 to c6
+	\item leave any number of messages to the opponent
+	\item give up
+
+\end{itemize}
+
+{\bf When connected to the server user can:}
+
+\begin{itemize}
+
+    \item identify himself with nick (no passwords)
+    \item connect to the game of given id (only, if he is the player in this game)
+    \item list all games connected to him (by nick)
+    \item start a new game:
+    \begin{itemize}
+        \item if there is no other new game on the server 
+        \item new game with status "waiting for opponent" is started
+        \item if there is a new game without a opponent, the player joins this game
+        \item id and status of a new game is sent to the player
+	\end{itemize}        
+\end{itemize}
+
+All game data must be stored in folders and files. 
+All network communication is based on tcp. 
+Server does not remove resolved games. 
+Each client connection must be handled by it's own process. 
+All interprocess communication must be based on sysV IPC.
+
+\section{Modules}
+Source files are stored in $src$ folder and contains the following modules
+
+\begin{itemize}
+	\item util - all the common utility functions
+	\item server - server related stuff
+	\item client - client related stuff
+\end{itemize}	
+
+TODO Detailed documentation.
+
+\end{document}
