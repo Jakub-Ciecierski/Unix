@@ -5,6 +5,8 @@ volatile sig_atomic_t do_continue = 1;
 void sig_handler(int sig)
 {
 	fprintf(stderr,"[Server] Signal \n");
+	// TODO;
+	kill(0, SIGKILL);
 	do_continue = 0;
 }
 
@@ -24,20 +26,7 @@ void connection_handler(int cfd)
 	if(pid < 0) ERR("fork()");
 	if(pid == 0)
 	{
-		// make it global / input parameter ??
-		//char* path = "~/Public/programming/unix/project/src/server/connection";
-		
 		connection_init(cfd);
-		
-		// TODO wait for all children
-		/*
-		int const len = 10;
-		char argv1[len];
-		if(snprintf(argv1, len, "%d", cfd) < 0 ) ERR("snprintf");
-		
-		char* path = "./connection";
-		if(execl(path, argv1) < 0) ERR("exec");
-		*/
 	}
 	fprintf(stderr,"[Server] Server started new connection \n");
 }
@@ -107,6 +96,10 @@ void init_tcp(int* fdT, int* new_flags, int port)
  * */
 void init_dir()
 {	
+	char filepath_p[DB_FILENAME_SIZE];
+	char filepath_g[DB_FILENAME_SIZE];
+	int fd;
+
 	if(mkdir(DB_DIR, 0777) < 0) 
 		if(errno != EEXIST) ERR("mkdir");
 	
@@ -115,6 +108,15 @@ void init_dir()
 		
 	if(mkdir(DB_GAME_DIR, 0777) < 0) 
 		if(errno != EEXIST) ERR("mkdir");
+	
+	/// Create file mutexes
+	if(sprintf(filepath_p, "%s/%s", DB_PLAYER_DIR, DB_PLAYER_MUTEX) < 0) ERR("sprintf");
+	if((fd = TEMP_FAILURE_RETRY(open(filepath_p,  O_CREAT|O_WRONLY, 0777))) < 0) ERR("open");
+	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
+	
+	if(sprintf(filepath_g, "%s/%s", DB_GAME_DIR, DB_GAME_MUTEX) < 0) ERR("sprintf");
+	if((fd = TEMP_FAILURE_RETRY(open(filepath_g,  O_CREAT|O_WRONLY, 0777))) < 0) ERR("open");
+	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
 	
 	// switch to main database dir
 	//if (chdir(DB_DIR) == -1) ERR("chdir");

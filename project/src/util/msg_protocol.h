@@ -19,14 +19,18 @@
 /******** PROTOCOL HEADERS ********/
 /**********************************/
 /// CLIENT SIDE
-#define CMP_REGISTER "rr"
+#define CMP_REGISTER "re"
 #define CMP_LOGIN "ll"
-#define CMP_GAME "gg"
+#define CMP_GAME_NEW "gn"
+#define CMP_GAME_EXT "ge"
 #define CMP_STATUS "ss"
 
 /// SERVER SIDE
 #define CMP_REGISTER_ACC "ra"
-#define CMP_REGISTER_REJ "re"
+#define CMP_REGISTER_REJ "rr"
+
+#define CMP_LOGIN_ACC "la"
+#define CMP_LOGIN_REJ "lr"
 
 /**********************************/
 /********* CLIENTS STATES *********/

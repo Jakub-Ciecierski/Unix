@@ -16,6 +16,17 @@ void change_status(int status)
 /******** MESSAGE HANDLERS ********/
 /**********************************/
 
+void msg_logacc_handler(int fd)
+{
+	fprintf(stdout, " << Login successfull, welcome to the Server!\n");
+	change_status(CMP_S_LOGGED_IN);
+}
+
+void msg_logrej_handler(int fd)
+{
+	fprintf(stdout, " << Login failed, please try different name\n");
+}
+
 void msg_regacc_handler(int fd)
 {
 	fprintf(stdout, " << Registretion successfull, welcome to the Server!\n");
@@ -49,6 +60,18 @@ void msg_handler(int fd)
 	{
 		msg_regrej_handler(fd);
 	}
+	
+	/// LOGIN ACC
+	else if (strcmp(header, CMP_LOGIN_ACC) == 0)
+	{
+		msg_logacc_handler(fd);
+	} 
+	/// LOGIN REJ
+	else if (strcmp(header, CMP_LOGIN_REJ) == 0)
+	{
+		msg_logrej_handler(fd);
+	}
+	
 	else{
 		perror("unknown message");
 		exit(EXIT_FAILURE);
@@ -57,7 +80,7 @@ void msg_handler(int fd)
 }
 
 /**********************************/
-/******** CONSOLE HANDLERS ********/
+/******** CONSOLE USAGES **********/
 /**********************************/
 
 void cnl_usage_s_loggedin()
@@ -68,6 +91,7 @@ void cnl_usage_s_loggedin()
 	fprintf(stdout, " << [s]tatus\n");
 	fprintf(stdout, "    Current status of your connection\n\n");
 }
+
 void cnl_usage_s_loggedout()
 {
 	fprintf(stdout, " << Console usage:\n\n");
@@ -78,35 +102,40 @@ void cnl_usage_s_loggedout()
 	fprintf(stdout, " << [r]egister\n");
 	fprintf(stdout, "    Registers in to the network\n\n");
 }
+
 void cnl_usage_s_game()
 {
 	fprintf(stdout, " << TODO\n\n");
 }
 
-void cnl_usage(){
-	fprintf(stdout, " << Console usage:\n\n");
-	
-	fprintf(stdout, " << [l]ogin\n");
-	fprintf(stdout, "    Logs in to the network\n\n");
-	
-	fprintf(stdout, " << [r]egister\n");
-	fprintf(stdout, "    Registers in to the network\n\n");
-	
-	fprintf(stdout, " << [g]ame\n");
-	fprintf(stdout, "    Starts or find an available game\n\n");
-	
-	fprintf(stdout, " << [s]tatus\n");
-	fprintf(stdout, "    Current status of your connection\n\n");
-}
+/**********************************/
+/******** CONSOLE HANDLERS ********/
+/**********************************/
 
 void cnl_login_handler(int fd)
 {
-	fprintf(stdout, " << Please type your name TODO\n");
+	char msg[CMP_MSG_SIZE];
+	char buffer[CMP_BUFFER_SIZE];	
+	
+	// ask client for name
+	fprintf(stdout, " << Please type a name to login:\n");
+	
+	if(fgets(msg, CMP_MSG_SIZE, stdin) < 0) ERR("fgets");
+	// we don't want new line character
+	msg[strcspn(msg, "\n")] = 0;
+	
+	if(sprintf(buffer, "%s%s", CMP_LOGIN, msg) < 0) ERR("sprintf");
+	
+	// send message to server
+	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) ERR("bulk_write");
+	
+	fprintf(stderr, "[Client] Message sent: \n%s\n\n", buffer);
 }
 
 void cnl_register_handler(int fd)
 {
 	char msg[CMP_MSG_SIZE];
+	char buffer[CMP_BUFFER_SIZE];
 	
 	// ask client for name
 	fprintf(stdout, " << Please type a name to register:\n");
@@ -115,27 +144,54 @@ void cnl_register_handler(int fd)
 	// we don't want new line character
 	msg[strcspn(msg, "\n")] = 0;
 	
-	char buffer[CMP_BUFFER_SIZE];
-	
 	if(sprintf(buffer, "%s%s", CMP_REGISTER, msg) < 0) ERR("sprintf");
 	
 	// send message to server
 	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) ERR("bulk_write");
 	
-	// read status msg
 	fprintf(stderr, "[Client] Message sent: \n%s\n\n", buffer);
-	//if(bulk_write(fd, msg, BUFFER_SIZE+sizeof(REGISTER_MSG)) < 0 ) ERR("bulk_write");
 }
 
 void cnl_game_handler(int fd)
 {
-	fprintf(stdout, " << Game TODO\n");
+	fprintf(stdout, " << Type ID of Game you want to connect\n");
+	fprintf(stdout, " << Type 'new' to join new Game \n");
+	
+	char msg[CMP_MSG_SIZE];
+	char buffer[CMP_BUFFER_SIZE];
+	
+	if(fgets(msg, CMP_MSG_SIZE, stdin) < 0) ERR("fgets");
+	// we don't want new line character
+	msg[strcspn(msg, "\n")] = 0;
+	
+	// new game
+	if(strstr(msg, "new") != NULL)
+	{
+		fprintf(stderr, "[Client] Creating new Game Request \n");
+		if(sprintf(buffer, "%s%s", CMP_GAME_NEW, msg) < 0) ERR("sprintf");
+	}
+	// Join existing game
+	else if(atoi(msg) >= 0)
+	{
+		fprintf(stderr, "[Client] Join existing Game Request \n");
+		if(sprintf(buffer, "%s%s", CMP_GAME_EXT, msg) < 0) ERR("sprintf");
+	}
+	else{
+		return;
+	}
+
+	// send message to server
+	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) ERR("bulk_write");
 }
 
 void cnl_status_handler(int fd)
 {
 	fprintf(stdout, " << Status TODO\n");
 }
+
+/**********************************/
+/**** CONSOLE STATUS HANDLERS *****/
+/**********************************/
 
 void cnl_handler_s_loggedin(int fd, char* line)
 {
@@ -147,6 +203,7 @@ void cnl_handler_s_loggedin(int fd, char* line)
 	{
 		cnl_status_handler(fd);
 	}
+	// print usage
 	else
 	{
 		cnl_usage_s_loggedin();
@@ -163,6 +220,7 @@ void cnl_handler_s_loggedout(int fd, char* line)
 	{
 		cnl_register_handler(fd);
 	}
+	// print usage
 	else
 	{
 		cnl_usage_s_loggedout();
@@ -171,6 +229,7 @@ void cnl_handler_s_loggedout(int fd, char* line)
 
 void cnl_handler_s_game(int fd, char* line)
 {
+	// print usage
 	cnl_usage_s_game();
 }
 
@@ -193,28 +252,6 @@ void cnl_handler(int fd)
 	{
 		cnl_handler_s_game(fd, buffer);
 	}
-	
-	/*
-	if(strstr(buffer, "login") != NULL)
-	{
-		cnl_login_handler(fd);
-	} 
-	else if(strstr(buffer, "register") != NULL)
-	{
-		cnl_register_handler(fd);
-	}
-	else if(strstr(buffer, "game") != NULL)
-	{
-		cnl_game_handler(fd);
-	}
-	else if(strstr(buffer, "status") != NULL)
-	{
-		cnl_status_handler(fd);
-	}
-	else
-	{
-		cnl_usage();
-	}*/
 }
 
 void get_current_status(int fd)

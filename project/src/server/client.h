@@ -29,30 +29,33 @@ void change_status(int status);
 
 void msg_regacc_handler(int fd);
 void msg_regrej_handler(int fd);
-// Main message handler
+
+void msg_logacc_handler(int fd);
+void msg_logrej_handler(int fd);
+
+/// Main message handler
 void msg_handler(int fd);
 
 /**********************************/
 /******** CONSOLE HANDLERS ********/
 /**********************************/
 
-// Usages
+/// Usages
 void cnl_usage_s_loggedin();
 void cnl_usage_s_loggedout();
 void cnl_usage_s_game();
-void cnl_usage();
 
-// Specific console handlers
+/// Specific console handlers
 void cnl_login_handler(int fd);
 void cnl_register_handler(int fd);
 void cnl_game_handler(int fd);
 void cnl_status_handler(int fd);
 
-// Individual console components - depending of client status
+/// Individual console components - depending of client status
 void cnl_handler_s_loggedin(int fd, char* line);
 void cnl_handler_s_loggedout(int fd, char* line);
 void cnl_handler_s_game(int fd, char* line);
-// Main console handler
+/// Main console handler
 void cnl_handler(int fd);
 
 /**********************************/
