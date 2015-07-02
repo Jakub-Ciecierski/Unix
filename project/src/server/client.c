@@ -12,6 +12,13 @@ void change_status(int status)
 	current_status = status;
 }
 
+void c_sigpipe_handler(int sig)
+{
+	fprintf(stderr,"[Client] Client disconeccted \n");
+	
+	do_continue = 0;
+}
+
 /**********************************/
 /******** MESSAGE HANDLERS ********/
 /**********************************/
@@ -37,41 +44,81 @@ void msg_regrej_handler(int fd)
 	fprintf(stdout, " << Registretion failed, please try different name\n");
 }
 
+void msg_game_acc_handler(int fd, char* msg)
+{
+	int g_id = atoi(msg);
+	fprintf(stdout, " << Joined Game: %d\n", g_id);
+}
+
+void msg_game_rej_handler(int fd)
+{
+	fprintf(stdout, " << Joining Game failed\n");
+}
+
+void msg_status_response_handler(int fd, char* msg)
+{
+	int i;
+	int* games;
+	
+	games = (int*)msg;
+	fprintf(stdout, " << Your games:\n");
+	for(i = 0; i < CMP_P_GAMES_SIZE; i++){
+		if(games[i] == CMP_P_EOA) break;
+		
+		fprintf(stdout, "ID: %d:\n", games[i]);
+	}
+}
+
 void msg_handler(int fd)
 {
 	char buffer[CMP_BUFFER_SIZE];
+	char header[CMP_HEADER_SIZE];
+	char msg[CMP_BUFFER_SIZE];
+	
 	if(bulk_read(fd, buffer, CMP_BUFFER_SIZE) < 0 ) ERR("bulk_read");
 	
 	fprintf(stderr, "[Client] after bulk_read: \n%s\n", buffer);
 	
 	// check the header
-	char header[CMP_HEADER_SIZE];
 	strncpy(header, buffer, CMP_HEADER_SIZE);
 	// some trash might be left out
 	if(memset(header+CMP_HEADER_SIZE, 0, CMP_HEADER_SIZE) < 0 ) ERR("memeset");
 	
+	// check the message itself
+	strncpy(msg, buffer + CMP_HEADER_SIZE, CMP_BUFFER_SIZE);
+	
 	/// REGISTER ACC
-	if (strcmp(header, CMP_REGISTER_ACC) == 0)
-	{
+	if (strcmp(header, CMP_REGISTER_ACC) == 0) {
 		msg_regacc_handler(fd);
 	} 
 	/// REGISTER REJ
-	else if (strcmp(header, CMP_REGISTER_REJ) == 0)
-	{
+	else if (strcmp(header, CMP_REGISTER_REJ) == 0) {
 		msg_regrej_handler(fd);
 	}
 	
 	/// LOGIN ACC
-	else if (strcmp(header, CMP_LOGIN_ACC) == 0)
-	{
+	else if (strcmp(header, CMP_LOGIN_ACC) == 0) {
 		msg_logacc_handler(fd);
 	} 
 	/// LOGIN REJ
-	else if (strcmp(header, CMP_LOGIN_REJ) == 0)
-	{
+	else if (strcmp(header, CMP_LOGIN_REJ) == 0) {
 		msg_logrej_handler(fd);
 	}
 	
+	/// JOIN GAME ACC
+	else if (strcmp(header, CMP_GAME_JOIN_ACC) == 0) {
+		msg_game_acc_handler(fd, msg);
+	}
+	/// JOIN GAME REJ
+	else if (strcmp(header, CMP_GAME_JOIN_REJ) == 0) {
+		msg_game_rej_handler(fd);
+	}
+	
+	/// STATUS RESPONSE
+	else if (strcmp(header, CMP_STATUS_RESPONSE) == 0) {
+		msg_status_response_handler(fd, msg);
+	}
+
 	else{
 		perror("unknown message");
 		exit(EXIT_FAILURE);
@@ -85,22 +132,16 @@ void msg_handler(int fd)
 
 void cnl_usage_s_loggedin()
 {
-	fprintf(stdout, " << [g]ame\n");
-	fprintf(stdout, "    Starts or find an available game\n\n");
-	
-	fprintf(stdout, " << [s]tatus\n");
-	fprintf(stdout, "    Current status of your connection\n\n");
+	fprintf(stdout, " 1. game - Starts or find an available game\n");
+	fprintf(stdout, " 2. status - Current status of your connection\n");
 }
 
 void cnl_usage_s_loggedout()
 {
 	fprintf(stdout, " << Console usage:\n\n");
 	
-	fprintf(stdout, " << [l]ogin\n");
-	fprintf(stdout, "    Logs in to the network\n\n");
-	
-	fprintf(stdout, " << [r]egister\n");
-	fprintf(stdout, "    Registers in to the network\n\n");
+	fprintf(stdout, " 1. login - Logs in to the network\n");
+	fprintf(stdout, " 2. register - Registers in to the network\n");
 }
 
 void cnl_usage_s_game()
@@ -186,7 +227,14 @@ void cnl_game_handler(int fd)
 
 void cnl_status_handler(int fd)
 {
-	fprintf(stdout, " << Status TODO\n");
+	char msg[CMP_BUFFER_SIZE];
+	
+	if(snprintf(msg, CMP_BUFFER_SIZE, "%s", CMP_STATUS) < 0) ERR("sprintf");
+	
+	// send message to server
+	if(bulk_write(fd, msg, CMP_BUFFER_SIZE) < 0 ) ERR("bulk_write");
+	
+	fprintf(stderr, "[Client] Message sent: \n%s\n\n", msg);
 }
 
 /**********************************/
@@ -311,12 +359,15 @@ int main(int argc, char** argv) {
 		return EXIT_FAILURE;
 	}
 	
-	if(sethandler(SIG_IGN,SIGPIPE)) ERR("Seting SIGPIPE:");
+	if(sethandler(c_sigpipe_handler,SIGPIPE)) ERR("Seting SIGPIPE:");
 	
 	fd=connect_inet_socket(argv[1],atoi(argv[2]));
 
 	// init the client status;
 	change_status(CMP_S_LOGGED_OUT);
+
+	// print console usage
+	cnl_usage_s_loggedout();
 
 	client_work(fd);
 	

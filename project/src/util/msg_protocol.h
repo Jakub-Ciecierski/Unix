@@ -12,8 +12,14 @@
 /************ BUFFERS *************/
 /**********************************/
 #define CMP_HEADER_SIZE 2*sizeof(char)
-#define CMP_MSG_SIZE 256
+#define CMP_MSG_SIZE 512
 #define CMP_BUFFER_SIZE CMP_MSG_SIZE + CMP_HEADER_SIZE
+
+/// How many games will be read from player profile minus 1
+/// to keep the end of array codition - DB_P_EOA
+#define CMP_P_GAMES_SIZE 25
+/// If found this value, then previous value was the last game id in the array
+#define CMP_P_EOA -1
 
 /**********************************/
 /******** PROTOCOL HEADERS ********/
@@ -23,7 +29,7 @@
 #define CMP_LOGIN "ll"
 #define CMP_GAME_NEW "gn"
 #define CMP_GAME_EXT "ge"
-#define CMP_STATUS "ss"
+#define CMP_STATUS "st"
 
 /// SERVER SIDE
 #define CMP_REGISTER_ACC "ra"
@@ -34,6 +40,8 @@
 
 #define CMP_GAME_JOIN_ACC "ga"
 #define CMP_GAME_JOIN_REJ "gr"
+
+#define CMP_STATUS_RESPONSE "sr"
 
 /**********************************/
 /********* CLIENTS STATES *********/

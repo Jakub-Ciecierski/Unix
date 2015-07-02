@@ -155,6 +155,8 @@ int db_init_game_dir(char* dir, int id)
 	if((fd = TEMP_FAILURE_RETRY(open(filepath,  O_CREAT|O_WRONLY, 0777))) < 0) ERR("open");
 	
 	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
+	
+	return 0;
 }
 
 int db_get_game_status(int id)
@@ -198,6 +200,8 @@ int db_set_game_status(int id, int status)
 	if(bulk_write(fd, buffer, size) < 0) ERR("bulk_write");
 	
 	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");	
+	
+	return 0;
 }
 
 int db_create_game()
@@ -220,10 +224,8 @@ int db_create_game()
 
 int db_join_game()
 {
-	int mutex_fd;
 	DIR* dirp;
 	struct dirent* dp;
-	char filepath[DB_FILENAME_SIZE];
 
 	fprintf(stderr, "[DB] Before opendir\n");
 	if(NULL == (dirp = opendir(DB_GAME_DIR))) ERR("opendir");
@@ -281,7 +283,7 @@ int db_game_add_player(int id, char* p_name)
 {
 	int ret_val;
 	int size;
-	int fd, mutex_fd;
+	int fd;
 	FILE* f;
 	char filepath[DB_FILENAME_SIZE];
 	char buffer[BD_G_LINE_SIZE];
@@ -340,9 +342,8 @@ int* db_player_get_games_id(char* p_name)
 	int fd;
 	int i;
 	//int ids[DB_P_GAMES_SIZE];
-	int* ids = (int*)malloc(DB_P_GAMES_SIZE*sizeof(int));
+	int* ids = (int*)malloc(CMP_P_GAMES_SIZE*sizeof(int));
 	char filepath[DB_FILENAME_SIZE];
-	char buffer[BD_P_SIZE];
 	char line[BD_G_LINE_SIZE];
 	char* err_buffer;
 
@@ -355,7 +356,7 @@ int* db_player_get_games_id(char* p_name)
 	if((f = fopen(filepath, "r+")) == NULL) {
 		if(errno == ENOENT){
 			fprintf(stderr, "[DB] player with name: %s does not exist\n",p_name);
-			return -1;
+			return NULL;
 		}
 		ERR("open");
 	}
@@ -366,7 +367,7 @@ int* db_player_get_games_id(char* p_name)
 	err_buffer = fgets(line, BD_G_LINE_SIZE, f);
 	line[strcspn(line, "\n")] = 0;
 	i = 0;
-	while(err_buffer != NULL && i < DB_P_GAMES_SIZE - 1 && strcmp(line, "\0") != 0){
+	while(err_buffer != NULL && i < CMP_P_GAMES_SIZE - 1 && strcmp(line, "\0") != 0){
 		
 		int id = atoi(line);
 		fprintf(stderr, "[DB] i: %d, ID: %d, line: %s\n", i, id, line);
@@ -378,7 +379,7 @@ int* db_player_get_games_id(char* p_name)
 		line[strcspn(line, "\n")] = 0;
 	}
 	// indicate the end of ids
-	ids[i++] = DB_P_EOA;
+	ids[i++] = CMP_P_EOA;
 	
 	db_set_lock(fd, 0, 0, F_UNLCK);
 	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");

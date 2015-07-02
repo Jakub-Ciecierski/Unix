@@ -14,6 +14,7 @@
 
 #include "../util/macros.h"
 #include "../util/io.h"
+#include "../util/msg_protocol.h"
 
 #include <dirent.h>
 #include <stdio.h>
@@ -21,6 +22,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -42,12 +44,6 @@
 #define BD_G_LINE_SIZE 1024
 /// filename size
 #define DB_FILENAME_SIZE 256
-
-/// How many games will be read from player profile minus 1
-/// to keep the end of array codition - DB_P_EOA
-#define DB_P_GAMES_SIZE 25
-/// If found this value, then previous value was the last game id in the array
-#define DB_P_EOA -1
 
 /**********************************/
 /****** DATABASE DIRECTORIES ******/

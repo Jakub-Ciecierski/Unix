@@ -11,6 +11,10 @@
 
 #define CN_NO_GAME -1
 
+/**********************************/
+/******** UTILITY FUNCTIONS *******/
+/**********************************/
+
 /**
  * Changes status of client's connection
  * */
@@ -19,6 +23,7 @@ void change_status(int status);
 void join_game(int id);
 
 void log_in(char* p_name);
+
 /**********************************/
 /******** MESSAGE HANDLERS ********/
 /**********************************/
@@ -29,7 +34,13 @@ void msg_register_handler(int fd, char* name);
 void msg_game_new_handler(int fd);
 void msg_game_ext_handler(int fd, int id);
 
+void msg_status_handler(int fd);
+
 void msg_handler(int fd);
+
+/**********************************/
+/******** MAIN FUNCTIONS **********/
+/**********************************/
 
 void connection_work(int cfd);
 

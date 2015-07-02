@@ -13,6 +13,13 @@ void c_sig_handler(int sig)
 	c_do_continue = 0;
 }
 
+void c_sigpipe_handler(int sig)
+{
+	fprintf(stderr,"[Connection] Client disconeccted \n");
+	
+	c_do_continue = 0;
+}
+
 void change_status(int status)
 {
 	current_status = status;
@@ -49,16 +56,19 @@ void msg_login_handler(int fd, char* name)
 		log_in(name);
 		
 		// send only header
-		if(sprintf(buffer, "%s", CMP_LOGIN_ACC) < 0) ERR("sprintf");
+		if(snprintf(buffer, CMP_BUFFER_SIZE, "%s", CMP_LOGIN_ACC) < 0) ERR("sprintf");
 	}
 	else{
 		fprintf(stderr, "[Connection] Login Failed\n");
 		
 
-		if(sprintf(buffer, "%s", CMP_LOGIN_REJ) < 0) ERR("sprintf");
+		if(snprintf(buffer, CMP_BUFFER_SIZE, "%s", CMP_LOGIN_REJ) < 0) ERR("sprintf");
 	}
 	
-	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) ERR("bulk_write");
+	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) {
+		if(errno != EPIPE)
+			ERR("bulk_write");
+	}
 }
 
 void msg_register_handler(int fd, char* name)
@@ -82,7 +92,10 @@ void msg_register_handler(int fd, char* name)
 		if(sprintf(buffer, "%s", CMP_REGISTER_ACC) < 0) ERR("sprintf");
 	}
 	
-	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) ERR("bulk_write");
+	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) {
+		if(errno != EPIPE)
+			ERR("bulk_write");
+	}
 }
 
 void msg_game_new_handler(int fd)
@@ -98,9 +111,12 @@ void msg_game_new_handler(int fd)
 	join_game(g_id);
 	change_status(CMP_S_IN_GAME);
 	
-	if(sprintf(buffer, "%s%d", CMP_REGISTER_REJ, g_id) < 0) ERR("sprintf");
+	if(sprintf(buffer, "%s%d", CMP_GAME_JOIN_ACC, g_id) < 0) ERR("sprintf");
 	
-	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) ERR("bulk_write");
+	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) {
+		if(errno != EPIPE)
+			ERR("bulk_write");
+	}
 }
 
 void msg_game_ext_handler(int fd, int id)
@@ -115,8 +131,8 @@ void msg_game_ext_handler(int fd, int id)
 	games = db_player_get_games_id(player_name);
 	game_exists = -1;
 
-	for(i = 0;i < DB_P_GAMES_SIZE; i++){
-		if(games[i] == DB_P_EOA) {
+	for(i = 0;i < CMP_P_GAMES_SIZE; i++){
+		if(games[i] == CMP_P_EOA) {
 			game_exists = 0;
 			break;
 		}
@@ -125,16 +141,61 @@ void msg_game_ext_handler(int fd, int id)
 
 	if(game_exists == 0){
 		// send acc reply
-		join_game(g_id);
+		join_game(id);
 		change_status(CMP_S_IN_GAME);
 		
-		if(sprintf(buffer, "%s%d", CMP_JOIN_GAME_ACC, id) < 0) ERR("sprintf");
+		if(snprintf(buffer, CMP_BUFFER_SIZE, "%s%d", CMP_GAME_JOIN_ACC, id) < 0) ERR("sprintf");
 		
 	}else{
-		if(sprintf(buffer, "%s%d", CMP_JOIN_GAME_REJ, id) < 0) ERR("sprintf");
+		if(snprintf(buffer, CMP_BUFFER_SIZE, "%s%d", CMP_GAME_JOIN_REJ, id) < 0) ERR("sprintf");
 	}
 
-	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) ERR("bulk_write");
+	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) {
+		if(errno != EPIPE)
+			ERR("bulk_write");
+	}
+	
+	free(games);
+}
+
+void msg_status_handler(int fd)
+{
+	int i;
+	int* games;
+	char* msg;
+	char buffer[CMP_BUFFER_SIZE];
+	
+	fprintf(stderr, "[Connection] Status handler\n");
+	
+	games = db_player_get_games_id(player_name);
+
+	//msg = (char*)games;
+	
+	strncpy(msg, (char*)games, CMP_BUFFER_SIZE);
+	
+	for(i = 0; i < CMP_P_GAMES_SIZE; i++){
+		if(games[i] == CMP_P_EOA) break;
+		
+		fprintf(stdout, "ID: %d:\n", games[i]);
+	}
+
+	if(snprintf(buffer, CMP_BUFFER_SIZE, "%s%s", 
+				CMP_STATUS_RESPONSE, msg) < 0) ERR("sprintf");
+
+	char test_char[CMP_BUFFER_SIZE];
+	strncpy(test_char, buffer + CMP_HEADER_SIZE, CMP_BUFFER_SIZE);
+	int* test = (int*)(test_char);
+
+	for(i = 0; i < CMP_P_GAMES_SIZE; i++){
+		if(test[i] == CMP_P_EOA) break;
+		
+		fprintf(stdout, "ID: %d:\n", test[i]);
+	}
+				
+	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) {
+		if(errno != EPIPE)
+			ERR("bulk_write");
+	}
 	
 	free(games);
 }
@@ -158,38 +219,32 @@ void msg_handler(int fd)
 	fprintf(stderr, "[Connection] after cmp_get_header\n");
 	
 	/// REGISTER
-	if (strcmp(header, CMP_REGISTER) == 0)
-	{
+	if (strcmp(header, CMP_REGISTER) == 0) {
 		// get the message it self
 		char* name = buffer + CMP_HEADER_SIZE;
 		msg_register_handler(fd, name);
 	} 
 	/// LOGIN
-	else if (strcmp(header, CMP_LOGIN) == 0)
-	{
+	else if (strcmp(header, CMP_LOGIN) == 0) {
 		// get the message it self
 		char* name = buffer + CMP_HEADER_SIZE;
 		msg_login_handler(fd, name);
 	}
 	/// GAME NEW
-	else if (strcmp(header, CMP_GAME_NEW) == 0)
-	{
+	else if (strcmp(header, CMP_GAME_NEW) == 0) {
 		msg_game_new_handler(fd);
 	}
 	/// GAME EXISTING
-	else if (strcmp(header, CMP_GAME_EXT) == 0)
-	{
+	else if (strcmp(header, CMP_GAME_EXT) == 0) {
 		// get the message it self
 		int id = atoi((buffer + CMP_HEADER_SIZE));
 		msg_game_ext_handler(fd, id);
 	}
 	/// STATUS
-	else if (strcmp(header, CMP_STATUS) == 0)
-	{
-	 
+	else if (strcmp(header, CMP_STATUS) == 0) {
+		msg_status_handler(fd);
 	}
-	else
-	{
+	else {
 		perror("unknown message");
 		exit(EXIT_FAILURE);
 	}
@@ -239,6 +294,7 @@ void connection_work(int cfd)
 void connection_init(int cfd)
 {
 	if(sethandler(c_sig_handler, SIGINT)<0) ERR("sethandler");
+	if(sethandler(c_sigpipe_handler, SIGPIPE)<0) ERR("sethandler");
 	
 	// init status	
 	current_status = CMP_S_LOGGED_OUT;

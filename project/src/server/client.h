@@ -33,6 +33,11 @@ void msg_regrej_handler(int fd);
 void msg_logacc_handler(int fd);
 void msg_logrej_handler(int fd);
 
+void msg_game_acc_handler(int fd, char* msg);
+void msg_game_rej_handler(int fd);
+
+void msg_status_response_handler(int fd, char* msg);
+
 /// Main message handler
 void msg_handler(int fd);
 

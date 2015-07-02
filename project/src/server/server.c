@@ -74,6 +74,7 @@ void server_work(int fdT)
  * */
 void init_sig_handlers()
 {
+	// TODO ADD SIGCHILD
 	// set handlers
 	if(sethandler(sig_handler, SIGINT)<0) ERR("sethandler");
 	if(sethandler(SIG_IGN, SIGPIPE)<0) ERR("sethandler");
@@ -87,7 +88,7 @@ void init_tcp(int* fdT, int* new_flags, int port)
 	// TCP inet socket
 	*fdT=bind_inet_socket(port, SOCK_STREAM, BACKLOG);
 	*new_flags = fcntl(*fdT, F_GETFL) | O_NONBLOCK;
-	fcntl(fdT, F_SETFL, new_flags);
+	fcntl(*fdT, F_SETFL, new_flags);
 }
 
 /**
