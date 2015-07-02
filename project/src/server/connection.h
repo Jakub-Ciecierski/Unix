@@ -9,10 +9,14 @@
 
 #include <stdio.h>
 
+#define CN_NO_GAME -1
+
 /**
  * Changes status of client's connection
  * */
 void change_status(int status);
+
+void join_game(int id);
 
 void log_in(char* p_name);
 /**********************************/

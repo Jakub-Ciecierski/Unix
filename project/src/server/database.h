@@ -43,6 +43,12 @@
 /// filename size
 #define DB_FILENAME_SIZE 256
 
+/// How many games will be read from player profile minus 1
+/// to keep the end of array codition - DB_P_EOA
+#define DB_P_GAMES_SIZE 25
+/// If found this value, then previous value was the last game id in the array
+#define DB_P_EOA -1
+
 /**********************************/
 /****** DATABASE DIRECTORIES ******/
 /**********************************/
@@ -149,7 +155,7 @@ int db_game_add_player(int id, char* p_name);
 /**********************************/
 
 /**
- * Return an array of game ids, to which the player
+ * Return an array of game ids of size DB_P_GAMES_SIZE, to which the player
  * belongs.
  * */
 int* db_player_get_games_id(char* p_name);

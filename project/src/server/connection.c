@@ -4,6 +4,7 @@ volatile sig_atomic_t c_do_continue = 1;
 
 int current_status = CMP_S_LOGGED_OUT;
 char player_name[DB_FILENAME_SIZE];
+int current_game;
 
 void c_sig_handler(int sig)
 {
@@ -15,6 +16,11 @@ void c_sig_handler(int sig)
 void change_status(int status)
 {
 	current_status = status;
+}
+
+void join_game(int id)
+{
+	current_game = id;
 }
 
 void log_in(char* p_name)
@@ -81,18 +87,56 @@ void msg_register_handler(int fd, char* name)
 
 void msg_game_new_handler(int fd)
 {
+	char buffer[CMP_BUFFER_SIZE];
 	int g_id;
+	
 	fprintf(stderr, "[Connection] Looking for new Game \n");
 	
 	// run the function that connects the player with new game
 	g_id = db_join_or_create_game(player_name);
+	
+	join_game(g_id);
+	change_status(CMP_S_IN_GAME);
+	
+	if(sprintf(buffer, "%s%d", CMP_REGISTER_REJ, g_id) < 0) ERR("sprintf");
+	
+	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) ERR("bulk_write");
 }
 
 void msg_game_ext_handler(int fd, int id)
 {
+	char buffer[CMP_BUFFER_SIZE];
+	int* games;
+	int game_exists;
+	int i;
+
 	fprintf(stderr, "[Connection] Trying to connect to Game: %d\n", id);
+
+	games = db_player_get_games_id(player_name);
+	game_exists = -1;
+
+	for(i = 0;i < DB_P_GAMES_SIZE; i++){
+		if(games[i] == DB_P_EOA) {
+			game_exists = 0;
+			break;
+		}
+		fprintf(stderr, "[Connection] Game#%d id: %d\n", i, games[i]);
+	}
+
+	if(game_exists == 0){
+		// send acc reply
+		join_game(g_id);
+		change_status(CMP_S_IN_GAME);
+		
+		if(sprintf(buffer, "%s%d", CMP_JOIN_GAME_ACC, id) < 0) ERR("sprintf");
+		
+	}else{
+		if(sprintf(buffer, "%s%d", CMP_JOIN_GAME_REJ, id) < 0) ERR("sprintf");
+	}
+
+	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) ERR("bulk_write");
 	
-	
+	free(games);
 }
 
 /**
@@ -198,7 +242,8 @@ void connection_init(int cfd)
 	
 	// init status	
 	current_status = CMP_S_LOGGED_OUT;
-
+	join_game(CN_NO_GAME);
+	
 	connection_work(cfd);
 	
 	exit(EXIT_SUCCESS);

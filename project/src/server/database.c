@@ -234,6 +234,7 @@ int db_join_game()
 		errno = 0;
 		if ((dp = readdir(dirp)) != NULL) {
 			if(dp->d_type == DT_DIR) {
+				// skip current and last dir aka '.' '..'
 				if((id = atoi(dp->d_name)) < 0 || 
 					strcmp(dp->d_name, ".") == 0 || 
 					strcmp(dp->d_name, "..") == 0) continue;
@@ -336,14 +337,53 @@ int db_game_add_player(int id, char* p_name)
 
 int* db_player_get_games_id(char* p_name)
 {
+	int fd;
+	int i;
+	//int ids[DB_P_GAMES_SIZE];
+	int* ids = (int*)malloc(DB_P_GAMES_SIZE*sizeof(int));
 	char filepath[DB_FILENAME_SIZE];
+	char buffer[BD_P_SIZE];
+	char line[BD_G_LINE_SIZE];
+	char* err_buffer;
+
 	FILE* f;
 	
 	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%s%s", DB_PLAYER_DIR, p_name, DB_PLAYER_EXT) < 0) ERR("sprintf");
 	
-	if((f = fopen(filepath, "r")) == NULL) ERR("fopen");
+	fprintf(stderr, "[DB] opening file: %s\n", filepath);
+
+	if((f = fopen(filepath, "r+")) == NULL) {
+		if(errno == ENOENT){
+			fprintf(stderr, "[DB] player with name: %s does not exist\n",p_name);
+			return -1;
+		}
+		ERR("open");
+	}
+
+	fd = fileno(f);
+	db_set_lock(fd, 0, 0, F_WRLCK);
 	
-	// ... todo
+	err_buffer = fgets(line, BD_G_LINE_SIZE, f);
+	line[strcspn(line, "\n")] = 0;
+	i = 0;
+	while(err_buffer != NULL && i < DB_P_GAMES_SIZE - 1 && strcmp(line, "\0") != 0){
+		
+		int id = atoi(line);
+		fprintf(stderr, "[DB] i: %d, ID: %d, line: %s\n", i, id, line);
+
+		if(id >= 0)
+			ids[i++] = id;
+			
+		err_buffer = fgets(line, BD_G_LINE_SIZE, f);
+		line[strcspn(line, "\n")] = 0;
+	}
+	// indicate the end of ids
+	ids[i++] = DB_P_EOA;
+	
+	db_set_lock(fd, 0, 0, F_UNLCK);
+	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
+	
+	return ids;
 }
 
 int db_init_player_file(int fd, char* p_name)

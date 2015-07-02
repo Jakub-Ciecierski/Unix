@@ -32,6 +32,9 @@
 #define CMP_LOGIN_ACC "la"
 #define CMP_LOGIN_REJ "lr"
 
+#define CMP_GAME_JOIN_ACC "ga"
+#define CMP_GAME_JOIN_REJ "gr"
+
 /**********************************/
 /********* CLIENTS STATES *********/
 /**********************************/
