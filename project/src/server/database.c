@@ -156,7 +156,7 @@ int db_add_chat_entry(int id, char* p_name, char* msg)
 	if((size = snprintf(buffer, BD_P_SIZE, "[%s]: %s", 
 							p_name, msg)) < 0) ERR("sprintf");
 											
-	lseek(fd, 0 , SEEK_END);
+	if(lseek(fd, 0 , SEEK_END) < 0) ERR("lseek");
 	if(bulk_write(fd, buffer, size) < 0) ERR("bulk_write");
 	
 	fprintf(stderr, "[DB] New chat entry %s", buffer);
@@ -191,8 +191,8 @@ int db_get_next_game_id()
 	fprintf(stderr, "[DB] id: %d\n", id);
 	
 	// reset the content of file
-	ftruncate(mutex_fd, 0);
-	lseek(mutex_fd, 0, SEEK_SET);
+	if(ftruncate(mutex_fd, 0) < 0) ERR("FTRUNCATE");
+	if(lseek(mutex_fd, 0, SEEK_SET) < 0) ERR("lseek");
 	
 	// write to buffer
 	next_id = id + 1;
@@ -270,7 +270,7 @@ int db_add_move(int id, char* move)
 	if((fd = TEMP_FAILURE_RETRY(open(filepath, O_CREAT|O_RDWR, 0777))) < 0) ERR("open");
 	db_set_lock(fd, 0, 0, F_WRLCK);
 	
-	lseek(fd, 0, SEEK_END);
+	if(lseek(fd, 0, SEEK_END) < 0) ERR("lseek");
 	
 	if(bulk_write(fd, buffer, size) < 0) ERR("bulk_write");
 	
@@ -323,8 +323,8 @@ int db_board_move(int id, int x1, int y1, int x2, int y2)
 		fprintf(stderr, "\n");
 	}
 	
-	ftruncate(fd, 0);
-	lseek(fd, 0, SEEK_SET);
+	if(ftruncate(fd, 0) < 0 ) ERR("lseek");
+	if(lseek(fd, 0, SEEK_SET) < 0) ERR("lseek");
 	
 	if(bulk_write(fd, read_buffer, DB_BOARD_SIZE) < 0) ERR("bulk_write");
 	
@@ -440,8 +440,8 @@ int db_set_player_turn(int id, char* p_name)
 	if((fd = TEMP_FAILURE_RETRY(open(filepath, O_RDWR, 0777))) < 0) ERR("open");
 	db_set_lock(fd, 0, 0, F_WRLCK);
 
-	ftruncate(fd, 0);
-	lseek(fd, 0, SEEK_SET);
+	if(ftruncate(fd, 0) < 0) ERR("ftruncate");
+	if(lseek(fd, 0, SEEK_SET) < 0) ERR("lseek");
 	
 	if((size = snprintf(buffer, BD_G_SIZE, "%s", p_name)) < 0) ERR("sprintf");
 
@@ -503,9 +503,6 @@ char* db_get_player_turn(int id)
 	if((fd = TEMP_FAILURE_RETRY(open(filepath, O_RDWR, 0777))) < 0) ERR("open");
 	db_set_lock(fd, 0, 0, F_WRLCK);
 
-	//ftruncate(fd, 0);
-	//lseek(fd, 0, SEEK_SET);
-	
 	if(bulk_read(fd, buffer, BD_G_SIZE) < 0) ERR("bulk_write");
 	
 	fprintf(stderr, "[DB] player_turn: %s\n", buffer);
@@ -551,8 +548,8 @@ int db_set_game_status(int id, int status)
 	if((fd = TEMP_FAILURE_RETRY(open(filepath, O_RDWR, 0777))) < 0) ERR("open");
 	
 	// reset the content of file
-	ftruncate(fd, 0);
-	lseek(fd, 0, SEEK_SET);
+	if(ftruncate(fd, 0) < 0) ERR("ftrucate");
+	if(lseek(fd, 0, SEEK_SET) < 0) ERR("lseek");
 	
 	if((size = sprintf(buffer, "%d", status)) < 0) ERR("sprintf");
 	if(memset(buffer+size, 0, BD_G_SIZE-size) < 0 ) ERR("memeset");
@@ -704,10 +701,12 @@ int db_game_add_player(int id, char* p_name)
 
 int* db_player_get_games_id(char* p_name)
 {
+	int* ids;
 	int fd;
 	int i;
 	//int ids[DB_P_GAMES_SIZE];
-	int* ids = (int*)malloc(CMP_P_GAMES_SIZE*sizeof(int));
+	if((ids = (int*)malloc(CMP_P_GAMES_SIZE*sizeof(int))) == NULL) ERR("malloc");
+	
 	char filepath[DB_FILENAME_SIZE];
 	char line[BD_G_LINE_SIZE];
 	char* err_buffer;
@@ -832,4 +831,3 @@ int db_player_exists(char* p_name)
 
 	return ret;
 }
-

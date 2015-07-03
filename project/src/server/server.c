@@ -88,7 +88,6 @@ void server_work(int fdT)
  * */
 void init_sig_handlers()
 {
-	// TODO ADD SIGCHILD
 	// set handlers
 	if(sethandler(sig_handler, SIGINT)<0) ERR("sethandler");
 	if(sethandler(SIG_IGN, SIGPIPE)<0) ERR("sethandler");

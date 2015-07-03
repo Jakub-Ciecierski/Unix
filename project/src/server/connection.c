@@ -94,6 +94,7 @@ void msg_game_new_handler(int fd)
 	join_game(g_id);
 	change_status(CMP_S_IN_GAME);
 	
+	g_id = htonl(g_id);
 	if(sprintf(buffer, "%s%d", CMP_GAME_JOIN_ACC, g_id) < 0) ERR("sprintf");
 	
 	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) {
@@ -130,18 +131,18 @@ void msg_game_ext_handler(int fd, int id)
 		join_game(id);
 		change_status(CMP_S_IN_GAME);
 		
-		if(snprintf(buffer, CMP_BUFFER_SIZE, "%s%d", CMP_GAME_JOIN_ACC, id) < 0) ERR("sprintf");
-		
+		if(snprintf(buffer, CMP_BUFFER_SIZE, "%s%d", CMP_GAME_JOIN_ACC, htonl(id)) < 0) ERR("sprintf");
+
 	}
 	else {
-		if(snprintf(buffer, CMP_BUFFER_SIZE, "%s%d", CMP_GAME_JOIN_REJ, id) < 0) ERR("sprintf");
+		if(snprintf(buffer, CMP_BUFFER_SIZE, "%s%d", CMP_GAME_JOIN_REJ, htonl(id)) < 0) ERR("sprintf");
 	}
 
 	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) {
 		if(errno != EPIPE)
 			ERR("bulk_write");
 	}
-	
+
 	free(games);
 }
 
@@ -163,7 +164,7 @@ void msg_status_handler(int fd)
 	buffer[1] = 'r';
 
 	for(i = 0; i < CMP_P_GAMES_SIZE; i++){
-		*(((int*)(buffer + CMP_HEADER_SIZE)+i)) = games[i];
+		*(((int*)(buffer + CMP_HEADER_SIZE)+i)) = htonl(games[i]);
 		if(games[i] == CMP_P_EOA) {
 			break;
 		}

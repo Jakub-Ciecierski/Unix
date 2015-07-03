@@ -61,6 +61,7 @@ void msg_regrej_handler(int fd)
 void msg_game_acc_handler(int fd, char* msg)
 {
 	int g_id = atoi(msg);
+	g_id = ntohl(g_id);
 	fprintf(stdout, " << Joined Game: %d\n", g_id);
 	
 	change_status(CMP_S_IN_GAME);
@@ -79,7 +80,7 @@ void msg_status_response_handler(int fd, char* msg)
 	fprintf(stdout, " << Your games:\n");
 	
 	for(i = 0; i < CMP_P_GAMES_SIZE; i++){
-		int id = *(((int*)(msg)+i));
+		int id = ntohl(*(((int*)(msg)+i)));
 		if(id == CMP_P_EOA) break;
 		
 		fprintf(stdout, "ID: %d:\n", id);
