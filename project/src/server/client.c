@@ -111,7 +111,7 @@ void msg_turn_response_handler(char* msg)
 }
 void msg_moves_response_handler(char* msg)
 {
-	fprintf(stdout, "[Client] Moves response\n");
+	fprintf(stdout, " << Moves:\n %s", msg);
 }
 void msg_chat_response_handler(char* msg)
 {

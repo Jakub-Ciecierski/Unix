@@ -138,6 +138,9 @@ int db_add_chat_entry(int id, char* p_name, char* msg);
 void db_get_board(int id, char* buffer);
 int db_board_move(int id, int x1, int y1, int x2, int y2);
 
+int db_get_moves(int id, char* buffer);
+int db_add_move(int id, char* move);
+
 /**
  * Reads g_mutex file and gets next available id 
  * which is stored in that file.

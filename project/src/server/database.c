@@ -232,6 +232,55 @@ void db_get_board(int id, char* buffer)
 	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");	
 }
 
+int db_get_moves(int id, char* buffer)
+{
+	int fd;
+	char filepath[DB_FILENAME_SIZE];
+
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%d/%s%s", DB_GAME_DIR, 
+											id, DB_H_G_F_MOVES, 
+											DB_GAME_EXT) < 0) ERR("sprintf");
+															
+	if((fd = TEMP_FAILURE_RETRY(open(filepath, O_CREAT|O_RDWR, 0777))) < 0) ERR("open");
+	db_set_lock(fd, 0, 0, F_WRLCK);
+
+	if(bulk_read(fd, buffer, BD_G_SIZE) < 0) ERR("bulk_write");
+	
+	db_set_lock(fd, 0, 0, F_UNLCK);
+	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
+	
+	return 0;
+									
+}
+
+int db_add_move(int id, char* move)
+{
+	int fd;
+	char filepath[DB_FILENAME_SIZE];
+	char buffer[BD_G_SIZE];
+	int size;
+
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%d/%s%s", DB_GAME_DIR, 
+											id, DB_H_G_F_MOVES, 
+											DB_GAME_EXT) < 0) ERR("sprintf");
+											
+	if((size = snprintf(buffer, BD_G_SIZE, "%s\n", move)) < 0) 
+		ERR("sprintf");
+											
+	if((fd = TEMP_FAILURE_RETRY(open(filepath, O_CREAT|O_RDWR, 0777))) < 0) ERR("open");
+	db_set_lock(fd, 0, 0, F_WRLCK);
+	
+	lseek(fd, 0, SEEK_END);
+	
+	if(bulk_write(fd, buffer, size) < 0) ERR("bulk_write");
+	
+	db_set_lock(fd, 0, 0, F_UNLCK);
+	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
+	
+	return 0;
+									
+}
+
 int db_board_move(int id, int x1, int y1, int x2, int y2)
 {
 	int fd;

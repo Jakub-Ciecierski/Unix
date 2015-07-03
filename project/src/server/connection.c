@@ -229,11 +229,15 @@ void msg_game_turn_handler(int fd)
 	
 	free(buff);
 }
-
+/// DONE
 void msg_game_moves_handler(int fd)
 {
+	char buffer[BD_G_SIZE];
+	db_get_moves(current_game, buffer);
+	
 	fprintf(stderr, "[Connection] moves handler\n");
-	cmp_send(fd, CMP_MOVES_RESPONSE, NULL);
+	
+	cmp_send(fd, CMP_MOVES_RESPONSE, buffer);
 }
 /// DONE
 void msg_game_chat_handler(int fd)
@@ -273,12 +277,18 @@ void msg_game_move_handler(int fd, char* msg)
 		
 		fprintf(stderr, "[Connection] x1: %d, y1: %d -> x2; %d, y2: %d\n", x1, y1, x2 ,y2);
 		
+		// move on the board
 		db_board_move(current_game, x1, y1, x2, y2);
 		
 		fprintf(stderr, "[Connection] Switching turn to: %s\n", opponent);
 		
+		// change turn
 		db_set_player_turn(current_game, opponent);
 		
+		// add move to archive
+		db_add_move(current_game, msg);
+		
+		// send msg
 		cmp_send(fd, CMP_MOVE_RESPONSE_ACC, NULL);
 	}
 	else
