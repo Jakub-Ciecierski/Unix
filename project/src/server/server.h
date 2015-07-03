@@ -7,6 +7,7 @@
 #include "database.h"
 #include "connection.h"
 
+#include <sys/wait.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -49,6 +50,7 @@ void server_work(int fdT);
 /**********************************/
 /*********** INITIATORS ***********/
 /**********************************/ 
+
 /**
  * Initiates signal handler
  * */

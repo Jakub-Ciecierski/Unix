@@ -46,6 +46,17 @@
 #define DB_FILENAME_SIZE 256
 
 /**********************************/
+/*********** BOARD ***************/
+/**********************************/
+
+#define DB_BOARD_ROW_SIZE 8
+#define DB_BOARD_SIZE DB_BOARD_ROW_SIZE * DB_BOARD_ROW_SIZE
+
+#define DB_BOARD_EMPTY '0'
+#define DB_BOARD_PLAYER1 '1'
+#define DB_BOARD_PLAYER2 '2'
+
+/**********************************/
 /****** DATABASE DIRECTORIES ******/
 /**********************************/
 #define DB_DIR "database"
@@ -91,6 +102,8 @@
 #define DB_H_G_F_PLAYERS "players"
 #define DB_H_G_F_MOVES "moves"
 #define DB_H_G_F_CHAT "chat"
+#define DB_H_G_F_TURN "turn"
+#define DB_H_G_F_BOARD "board"
 
 /// GAME STATUSES
 #define DB_H_G_SS_ACTIVE 0
@@ -117,6 +130,14 @@ int db_file_exists(char* dir, char* filename, char* mutex);
 /********* GAME FUNCTIONS *********/
 /**********************************/
 
+int db_get_opponent(int id, char* p_name, char* opp);
+
+void db_get_chat(int id, char* buffer);
+int db_add_chat_entry(int id, char* p_name, char* msg);
+
+void db_get_board(int id, char* buffer);
+int db_board_move(int id, int x1, int y1, int x2, int y2);
+
 /**
  * Reads g_mutex file and gets next available id 
  * which is stored in that file.
@@ -128,6 +149,8 @@ int db_create_game();
 int db_join_game();
 
 int db_join_or_create_game(char* p_name);
+
+int db_init_board(int fd);
 
 /**
  * Initiates the game directory according to the standard
@@ -145,6 +168,9 @@ int db_set_game_status(int id, int status);
  * 		0 on success or less than 0 when game has already two players
  * */
 int db_game_add_player(int id, char* p_name);
+
+int db_set_player_turn(int id, char* p_name);
+char* db_get_player_turn(int id);
 
 /**********************************/
 /******** PLAYER FUNCTIONS ********/

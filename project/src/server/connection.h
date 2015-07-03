@@ -36,6 +36,16 @@ void msg_game_ext_handler(int fd, int id);
 
 void msg_status_handler(int fd);
 
+void msg_game_board_handler(int fd);
+void msg_game_status_handler(int fd);
+void msg_game_turn_handler(int fd);
+void msg_game_moves_handler(int fd);
+void msg_game_chat_handler(int fd);
+void msg_game_msg_handler(int fd, char* msg);
+void msg_game_move_handler(int fd, char* msg);
+void msg_game_quit_handler(int fd);
+void msg_game_forfeit_handler(int fd);
+
 void msg_handler(int fd);
 
 /**********************************/

@@ -2,6 +2,20 @@
 
 volatile sig_atomic_t do_continue = 1;
 
+void sigchld_handler(int sig)
+{
+	fprintf(stderr,"child died \n");
+	pid_t pid;
+	for(;;){
+		pid=waitpid(0, NULL, WNOHANG);
+		if(0==pid) return;
+		if(0>pid) {
+			if(ECHILD==errno) return;
+			ERR("waitpid:");
+		}
+	}
+}
+
 void sig_handler(int sig)
 {
 	fprintf(stderr,"[Server] Signal \n");
@@ -78,6 +92,7 @@ void init_sig_handlers()
 	// set handlers
 	if(sethandler(sig_handler, SIGINT)<0) ERR("sethandler");
 	if(sethandler(SIG_IGN, SIGPIPE)<0) ERR("sethandler");
+	if(sethandler(sigchld_handler, SIGCHLD)<0) ERR("sethandler");
 }
 
 /**
@@ -142,6 +157,8 @@ void init_server(int port)
 	
 	// clean up
 	if(TEMP_FAILURE_RETRY(close(fdT))<0)ERR("close");
+	
+	while (TEMP_FAILURE_RETRY(wait(NULL)) > 0);
 
 	fprintf(stderr,"Server has terminated.\n");
 }

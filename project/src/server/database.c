@@ -67,6 +67,106 @@ void db_set_lock(int fd, int start, int len, int type)
 /********* GAME FUNCTIONS *********/
 /**********************************/
 
+int db_get_opponent(int id, char* p_name, char* opp)
+{
+	char filepath[DB_FILENAME_SIZE];
+	char line[BD_G_LINE_SIZE];
+	char* ret_value;
+	int fd;
+	FILE* f;
+	
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%d/%s%s", DB_GAME_DIR, 
+											id, DB_H_G_F_PLAYERS, 
+											DB_GAME_EXT) < 0) ERR("sprintf");
+											
+	if((f = fopen(filepath, "r+")) == NULL) {
+		if(errno == ENOENT){
+			fprintf(stderr, "[DB] Game with id: %d does not exist\n",id);
+			return -1;
+		}
+		ERR("open");
+	}								
+	fd = fileno(f);						
+	//if((fd = TEMP_FAILURE_RETRY(open(filepath, O_CREAT|O_RDWR, 0777))) < 0) ERR("open");
+	db_set_lock(fd, 0, 0, F_WRLCK);
+	
+	fgets(opp, BD_G_LINE_SIZE, f);
+	opp[strcspn(opp, "\n")] = 0;
+	
+	if(strcmp(opp, p_name) != 0) {
+		ret_value = line;
+	}
+	else{
+		fgets(opp, BD_G_LINE_SIZE, f);
+		opp[strcspn(opp, "\n")] = 0;
+	
+		if(strcmp(opp, p_name) != 0) {
+			ret_value = line;
+		}else ret_value = NULL;
+	}
+	if(ret_value != NULL)
+		fprintf(stderr, "[DB] %s vs %s\n",p_name, opp);
+	
+	db_set_lock(fd, 0, 0, F_UNLCK);
+	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
+	
+	return 0;
+}
+
+void db_get_chat(int id, char* buffer)
+{
+	char filepath[DB_FILENAME_SIZE];
+	int fd;
+	
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%d/%s%s", DB_GAME_DIR, 
+											id, DB_H_G_F_CHAT, 
+											DB_GAME_EXT) < 0) ERR("sprintf");
+											
+											
+											
+	if((fd = TEMP_FAILURE_RETRY(open(filepath, O_CREAT|O_RDWR, 0777))) < 0) ERR("open");
+	db_set_lock(fd, 0, 0, F_WRLCK);
+											
+	if(bulk_read(fd, buffer, BD_G_SIZE) < 0) ERR("bulk_write");
+	
+	fprintf(stderr, "[DB] Reading chat: %s", buffer);
+	
+	db_set_lock(fd, 0, 0, F_UNLCK);
+	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
+}
+
+int db_add_chat_entry(int id, char* p_name, char* msg)
+{
+	char filepath[DB_FILENAME_SIZE];
+	char buffer[BD_P_SIZE];
+	int size;
+	int fd;
+	
+	if((size = snprintf(filepath, DB_FILENAME_SIZE, "%s/%d/%s%s", DB_GAME_DIR, 
+											id, DB_H_G_F_CHAT, 
+											DB_GAME_EXT)) < 0) ERR("sprintf");
+	
+	if(memset(filepath+size, 0, DB_FILENAME_SIZE-size) < 0 ) ERR("memeset");
+	
+	fprintf(stderr, "[DB] filepath %s size: %d\n", filepath, size);	
+	
+	if((fd = TEMP_FAILURE_RETRY(open(filepath, O_CREAT|O_RDWR, 0777))) < 0) ERR("open");
+	db_set_lock(fd, 0, 0, F_WRLCK);
+	
+	if((size = snprintf(buffer, BD_P_SIZE, "[%s]: %s", 
+							p_name, msg)) < 0) ERR("sprintf");
+											
+	lseek(fd, 0 , SEEK_END);
+	if(bulk_write(fd, buffer, size) < 0) ERR("bulk_write");
+	
+	fprintf(stderr, "[DB] New chat entry %s", buffer);
+	
+	db_set_lock(fd, 0, 0, F_UNLCK);
+	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
+	
+	return 0;
+}
+
 int db_get_next_game_id()
 {
 	int size, memset_size;
@@ -96,12 +196,12 @@ int db_get_next_game_id()
 	
 	// write to buffer
 	next_id = id + 1;
-	if((size = sprintf(write_buffer, "%d", next_id)) < 0) ERR("sprintf");
+	if((size = snprintf(write_buffer, BD_G_SIZE, "%d", next_id)) < 0) ERR("sprintf");
 	memset_size = BD_G_SIZE - size;
 	if(memset(write_buffer+size, 0, memset_size) < 0 ) ERR("memeset");
 	fprintf(stderr, "[DB] write_buffer: \n%s\n", write_buffer);
 	
-	if(bulk_write(mutex_fd, write_buffer, BD_G_SIZE) < 0) ERR("bulk_write");
+	if(bulk_write(mutex_fd, write_buffer, size) < 0) ERR("bulk_write");
 	
 	// unlock access to player dir
 	db_set_lock(mutex_fd, 0, 0, F_UNLCK);
@@ -110,6 +210,109 @@ int db_get_next_game_id()
 	return id;
 }
 
+void db_get_board(int id, char* buffer)
+{
+	int fd;
+	char filepath[DB_FILENAME_SIZE];
+
+	if(snprintf(filepath, DB_FILENAME_SIZE, 	
+											"%s/%d/%s%s", DB_GAME_DIR, 
+											id, DB_H_G_F_BOARD, 
+											DB_GAME_EXT) < 0) ERR("sprintf");
+											
+
+	if((fd = TEMP_FAILURE_RETRY(open(filepath, O_CREAT|O_RDWR, 0777))) < 0) ERR("open");
+	db_set_lock(fd, 0, 0, F_WRLCK);
+											
+	if(bulk_read(fd, buffer, DB_BOARD_SIZE) < 0) ERR("bulk_write");
+	
+	fprintf(stderr, "[DB] Board %s", buffer);
+	
+	db_set_lock(fd, 0, 0, F_UNLCK);
+	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");	
+}
+
+int db_board_move(int id, int x1, int y1, int x2, int y2)
+{
+	int fd;
+	char filepath[DB_FILENAME_SIZE];
+	char read_buffer[DB_BOARD_SIZE];
+
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%d/%s%s", DB_GAME_DIR, 
+											id, DB_H_G_F_BOARD, 
+											DB_GAME_EXT) < 0) ERR("sprintf");
+											
+
+	if((fd = TEMP_FAILURE_RETRY(open(filepath, O_CREAT|O_RDWR, 0777))) < 0) ERR("open");
+	db_set_lock(fd, 0, 0, F_WRLCK);
+											
+	if(bulk_read(fd, read_buffer, DB_BOARD_SIZE) < 0) ERR("bulk_write");
+	
+	int i, j;
+	fprintf(stderr, " [DB] OLD Board \n");
+	
+	for(i = 0;i < DB_BOARD_ROW_SIZE; i++)
+	{
+		for(j = 0;j < DB_BOARD_ROW_SIZE; j++)
+		{
+			fprintf(stderr, "%c, ",read_buffer[i*DB_BOARD_ROW_SIZE + j]);
+		}
+		fprintf(stderr, "\n");
+	}
+	
+	read_buffer[y2 * DB_BOARD_ROW_SIZE + x2] = read_buffer[y1 * DB_BOARD_ROW_SIZE + x1];
+	read_buffer[y1 * DB_BOARD_ROW_SIZE + x1] = DB_BOARD_EMPTY;
+	
+	fprintf(stderr, " [DB] NEW Board \n");
+	
+	for(i = 0;i < DB_BOARD_ROW_SIZE; i++)
+	{
+		for(j = 0;j < DB_BOARD_ROW_SIZE; j++)
+		{
+			fprintf(stderr, "%c, ",read_buffer[i*DB_BOARD_ROW_SIZE + j]);
+		}
+		fprintf(stderr, "\n");
+	}
+	
+	ftruncate(fd, 0);
+	lseek(fd, 0, SEEK_SET);
+	
+	if(bulk_write(fd, read_buffer, DB_BOARD_SIZE) < 0) ERR("bulk_write");
+	
+	db_set_lock(fd, 0, 0, F_UNLCK);
+	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");	
+	
+	return 0;
+}
+
+int db_init_board(int fd)
+{
+	char board[DB_BOARD_SIZE];
+	int i,j;
+	int counter = 0;
+	int player = 0;
+	
+	for(i = 0;i < DB_BOARD_ROW_SIZE;i++) {
+		for(j = 0;j < DB_BOARD_ROW_SIZE;j++)
+		{
+			int index = i*DB_BOARD_ROW_SIZE + j;
+			if(i == 3) player = 1;
+			if(i != 3 && i != 4){
+				if((counter++)%2 == 0)
+					board[index] = player == 0 ? DB_BOARD_PLAYER1 : DB_BOARD_PLAYER2;
+				else
+					board[index] = DB_BOARD_EMPTY;
+			}
+			else
+				board[index] = DB_BOARD_EMPTY;
+			fprintf(stderr, "%c, ", board[i*DB_BOARD_ROW_SIZE + j]);
+		}
+		fprintf(stderr, "\n");
+	}
+	if(bulk_write(fd, board, DB_BOARD_SIZE) < 0) ERR("bulk_write");
+	
+	return 0;
+}
 
 int db_init_game_dir(char* dir, int id)
 {
@@ -119,44 +322,151 @@ int db_init_game_dir(char* dir, int id)
 	char buffer[BD_G_SIZE];
 	
 	/// ID
-	if(sprintf(filepath, "%s/%s%s", dir, DB_H_G_F_ID, DB_GAME_EXT) < 0) ERR("sprintf");
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%s%s", dir, DB_H_G_F_ID, DB_GAME_EXT) < 0) ERR("sprintf");
 	if((fd = TEMP_FAILURE_RETRY(open(filepath, O_CREAT|O_WRONLY, 0777))) < 0) ERR("open");
 	
-	if((size = sprintf(buffer, "%d", id)) < 0) ERR("sprintf");
+	if((size = snprintf(buffer, BD_G_SIZE, "%d", id)) < 0) ERR("sprintf");
 	if(memset(buffer+size, 0, BD_G_SIZE-size) < 0 ) ERR("memeset");
 	if(bulk_write(fd, buffer, size) < 0) ERR("bulk_write");
 	
 	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
 	
 	/// STATUS
-	if(sprintf(filepath, "%s/%s%s", dir, DB_H_G_F_STATUS, DB_GAME_EXT) < 0) ERR("sprintf");
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%s%s", dir, DB_H_G_F_STATUS, DB_GAME_EXT) < 0) ERR("sprintf");
 	if((fd = TEMP_FAILURE_RETRY(open(filepath,  O_CREAT|O_WRONLY, 0777))) < 0) ERR("open");
 	
-	if((size = sprintf(buffer, "%d", DB_H_G_SS_WAITING)) < 0) ERR("sprintf");
+	if((size = snprintf(buffer, BD_G_SIZE, "%d", DB_H_G_SS_WAITING)) < 0) ERR("sprintf");
 	if(memset(buffer+size, 0, BD_G_SIZE-size) < 0 ) ERR("memeset");
 	if(bulk_write(fd, buffer, size) < 0) ERR("bulk_write");
 	
 	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
 
 	/// PLAYERS
-	if(sprintf(filepath, "%s/%s%s", dir, DB_H_G_F_PLAYERS, DB_GAME_EXT) < 0) ERR("sprintf");
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%s%s", dir, DB_H_G_F_PLAYERS, DB_GAME_EXT) < 0) ERR("sprintf");
 	if((fd = TEMP_FAILURE_RETRY(open(filepath,  O_CREAT|O_WRONLY, 0777))) < 0) ERR("open");
 	
 	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
 	
 	/// MOVES
-	if(sprintf(filepath, "%s/%s%s", dir, DB_H_G_F_MOVES, DB_GAME_EXT) < 0) ERR("sprintf");
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%s%s", dir, DB_H_G_F_MOVES, DB_GAME_EXT) < 0) ERR("sprintf");
 	if((fd = TEMP_FAILURE_RETRY(open(filepath,  O_CREAT|O_WRONLY, 0777))) < 0) ERR("open");
 	
 	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
 	
 	/// CHAT
-	if(sprintf(filepath, "%s/%s%s", dir, DB_H_G_F_CHAT, DB_GAME_EXT) < 0) ERR("sprintf");
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%s%s", dir, DB_H_G_F_CHAT, DB_GAME_EXT) < 0) ERR("sprintf");
 	if((fd = TEMP_FAILURE_RETRY(open(filepath,  O_CREAT|O_WRONLY, 0777))) < 0) ERR("open");
 	
 	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
 	
+	/// TURN
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%s%s", dir, DB_H_G_F_TURN, DB_GAME_EXT) < 0) ERR("sprintf");
+	if((fd = TEMP_FAILURE_RETRY(open(filepath,  O_CREAT|O_RDWR, 0777))) < 0) ERR("open");
+	
+	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
+
+	/// BOARD
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%s%s", dir, DB_H_G_F_BOARD, DB_GAME_EXT) < 0) ERR("sprintf");
+	if((fd = TEMP_FAILURE_RETRY(open(filepath,  O_CREAT|O_WRONLY, 0777))) < 0) ERR("open");
+	db_init_board(fd);
+	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");
+	
 	return 0;
+}
+
+/**
+ * Set the player p_name as current turn
+ * */
+int db_set_player_turn(int id, char* p_name)
+{
+	int fd;
+	int size;
+	char filepath[DB_FILENAME_SIZE];
+	char buffer[BD_G_SIZE];
+
+	if((size = snprintf(filepath, DB_FILENAME_SIZE, "%s/%d/%s%s", 
+			DB_GAME_DIR, id, DB_H_G_F_TURN, DB_GAME_EXT)) < 0) ERR("sprintf");
+	
+	// lock mutex
+	if((fd = TEMP_FAILURE_RETRY(open(filepath, O_RDWR, 0777))) < 0) ERR("open");
+	db_set_lock(fd, 0, 0, F_WRLCK);
+
+	ftruncate(fd, 0);
+	lseek(fd, 0, SEEK_SET);
+	
+	if((size = snprintf(buffer, BD_G_SIZE, "%s", p_name)) < 0) ERR("sprintf");
+
+	if(bulk_write(fd, buffer, BD_G_SIZE) < 0) ERR("bulk_write");
+	
+	fprintf(stderr, "[DB] Setting turn to %s id: %d, size: %d\n",buffer, id, size);
+	
+	// unlock access to player dir
+	db_set_lock(fd, 0, 0, F_UNLCK);
+	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");	
+	
+	return 0;
+}
+
+int db_set_player_turn_by_pos(int id, int pos)
+{
+	int fd;
+	char filepath[DB_FILENAME_SIZE];
+	char line[BD_G_LINE_SIZE];
+	FILE* f;
+
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%d/%s%s", DB_GAME_DIR, id, DB_H_G_F_PLAYERS, DB_GAME_EXT) < 0) ERR("sprintf");
+
+	if((f = fopen(filepath, "r+")) == NULL) {
+		if(errno == ENOENT){
+			fprintf(stderr, "[DB] Game with id: %d does not exist\n",id);
+			return -1;
+		}
+		ERR("open");
+	}
+	fd = fileno(f);
+	db_set_lock(fd, 0, 0, F_WRLCK);
+	
+	// check second entry
+	fgets(line, BD_G_LINE_SIZE, f);
+	fgets(line, BD_G_LINE_SIZE, f);
+	line[strcspn(line, "\n")] = 0;
+	
+	fprintf(stderr, "[DB] Seoond player: %s\n", line);
+	
+	db_set_lock(fd, 0, 0, F_UNLCK);
+	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");	
+
+	db_set_player_turn(id, line);
+	
+	return 0;
+}
+
+char* db_get_player_turn(int id)
+{
+	int fd;
+	char* buffer = (char*)malloc(BD_G_SIZE*sizeof(char));
+	char filepath[DB_FILENAME_SIZE];
+
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%d/%s%s", 
+				DB_GAME_DIR, id, DB_H_G_F_TURN, DB_GAME_EXT) < 0) ERR("sprintf");
+
+	// lock mutex
+	if((fd = TEMP_FAILURE_RETRY(open(filepath, O_RDWR, 0777))) < 0) ERR("open");
+	db_set_lock(fd, 0, 0, F_WRLCK);
+
+	//ftruncate(fd, 0);
+	//lseek(fd, 0, SEEK_SET);
+	
+	if(bulk_read(fd, buffer, BD_G_SIZE) < 0) ERR("bulk_write");
+	
+	fprintf(stderr, "[DB] player_turn: %s\n", buffer);
+	
+	// unlock access to player dir
+	db_set_lock(fd, 0, 0, F_UNLCK);
+	if(TEMP_FAILURE_RETRY(close(fd)) < 0) ERR("close");	
+	
+	buffer[strcspn(buffer, "\n")] = 0;
+	return buffer;
 }
 
 int db_get_game_status(int id)
@@ -166,7 +476,7 @@ int db_get_game_status(int id)
 	char filepath[DB_FILENAME_SIZE];
 	char buffer[BD_G_LINE_SIZE];
 	
-	if(sprintf(filepath, "%s/%d/%s%s", DB_GAME_DIR, id, DB_H_G_F_STATUS, DB_GAME_EXT) < 0) ERR("sprintf");
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%d/%s%s", DB_GAME_DIR, id, DB_H_G_F_STATUS, DB_GAME_EXT) < 0) ERR("sprintf");
 	
 	if((fd = TEMP_FAILURE_RETRY(open(filepath, O_CREAT|O_RDWR, 0777))) < 0) ERR("open");
 	
@@ -188,7 +498,7 @@ int db_set_game_status(int id, int status)
 	char filepath[DB_FILENAME_SIZE];
 	char buffer[BD_G_LINE_SIZE];
 	
-	if(sprintf(filepath, "%s/%d/%s%s", DB_GAME_DIR, id, DB_H_G_F_STATUS, DB_GAME_EXT) < 0) ERR("sprintf");
+	if(snprintf(filepath, DB_FILENAME_SIZE, "%s/%d/%s%s", DB_GAME_DIR, id, DB_H_G_F_STATUS, DB_GAME_EXT) < 0) ERR("sprintf");
 	if((fd = TEMP_FAILURE_RETRY(open(filepath, O_RDWR, 0777))) < 0) ERR("open");
 	
 	// reset the content of file
@@ -212,7 +522,7 @@ int db_create_game()
 	// get next available id
 	id = db_get_next_game_id();
 	
-	if(sprintf(dir, "%s/%d", DB_GAME_DIR, id) < 0) ERR("sprintf");
+	if(snprintf(dir, DB_FILENAME_SIZE, "%s/%d", DB_GAME_DIR, id) < 0) ERR("sprintf");
 
 	if(mkdir(dir, 0777) < 0)
 		if(errno != EEXIST) ERR("mkdir");
@@ -224,6 +534,7 @@ int db_create_game()
 
 int db_join_game()
 {
+	int id;
 	DIR* dirp;
 	struct dirent* dp;
 
@@ -232,7 +543,6 @@ int db_join_game()
 	fprintf(stderr, "[DB] After opendir\n");
 
 	do {
-		int id;
 		errno = 0;
 		if ((dp = readdir(dirp)) != NULL) {
 			if(dp->d_type == DT_DIR) {
@@ -240,7 +550,7 @@ int db_join_game()
 				if((id = atoi(dp->d_name)) < 0 || 
 					strcmp(dp->d_name, ".") == 0 || 
 					strcmp(dp->d_name, "..") == 0) continue;
-				fprintf(stderr, "DIR: %s, id: %d\n", dp->d_name, id);
+				fprintf(stderr, "[DB] DIR: %s, id: %d\n", dp->d_name, id);
 				if(db_get_game_status(id) == DB_H_G_SS_WAITING){
 					// Change the status of Game to ACTIVE
 					db_set_game_status(id, DB_H_G_SS_ACTIVE);
@@ -259,6 +569,8 @@ int db_join_game()
 
 int db_join_or_create_game(char* p_name)
 {
+	fprintf(stderr, "[DB] Player: %s joining game\n", p_name);
+	
 	int id, mutex_fd;
 	
 	// lock access to player dir
@@ -267,6 +579,8 @@ int db_join_or_create_game(char* p_name)
 
 	if((id = db_join_game()) < 0){
 		id = db_create_game();
+		// the player who joined first will start first
+		db_set_player_turn(id, p_name);
 	}
 
 	db_game_add_player(id, p_name);
@@ -300,6 +614,7 @@ int db_game_add_player(int id, char* p_name)
 		ERR("open");
 	}
 	fd = fileno(f);
+	db_set_lock(fd, 0, 0, F_WRLCK);
 	
 	fprintf(stderr, "[DB] After add_player fopen\n");
 
@@ -327,6 +642,7 @@ int db_game_add_player(int id, char* p_name)
 	}
 
 	// unlock access to player dir
+	db_set_lock(fd, 0, 0, F_UNLCK);
 	if(TEMP_FAILURE_RETRY(fclose(f)) < 0) ERR("close");	
 
 	return ret_val;

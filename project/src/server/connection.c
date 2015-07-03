@@ -34,7 +34,7 @@ void log_in(char* p_name)
 {
 	// change status and save current login name
 	change_status(CMP_S_LOGGED_IN);
-	if(sprintf(player_name, "%s", p_name) < 0) ERR("sprintf");
+	if(snprintf(player_name, BD_P_SIZE, "%s", p_name) < 0) ERR("sprintf");
 	
 	fprintf(stderr,"[Connection] Player name: %s\n", player_name);
 }
@@ -45,9 +45,7 @@ void log_in(char* p_name)
 
 void msg_login_handler(int fd, char* name)
 {
-	fprintf(stderr,"[Connection] User wants to register name: %s\n", name);
-	
-	char buffer[CMP_BUFFER_SIZE];
+	fprintf(stderr,"[Connection] User wants to login in name: %s\n", name);
 
 	if(db_player_exists(name) == 0 ){
 		// send deny msg
@@ -55,46 +53,31 @@ void msg_login_handler(int fd, char* name)
 		
 		log_in(name);
 		
-		// send only header
-		if(snprintf(buffer, CMP_BUFFER_SIZE, "%s", CMP_LOGIN_ACC) < 0) ERR("sprintf");
+		cmp_send(fd, CMP_LOGIN_ACC, NULL);
 	}
 	else{
 		fprintf(stderr, "[Connection] Login Failed\n");
 		
-
-		if(snprintf(buffer, CMP_BUFFER_SIZE, "%s", CMP_LOGIN_REJ) < 0) ERR("sprintf");
-	}
-	
-	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) {
-		if(errno != EPIPE)
-			ERR("bulk_write");
+		cmp_send(fd, CMP_LOGIN_REJ, NULL);
 	}
 }
 
 void msg_register_handler(int fd, char* name)
 {
 	fprintf(stderr,"[Connection] User wants to register name: %s\n", name);
-	
-	char buffer[CMP_BUFFER_SIZE];
 
 	if(db_create_player(name) < 0 ){
 		// send deny msg
 		fprintf(stderr, "[Connection] Name already exists\n");
 		
-		// send only header
-		if(sprintf(buffer, "%s", CMP_REGISTER_REJ) < 0) ERR("sprintf");
+		cmp_send(fd, CMP_REGISTER_REJ, NULL);
 	}
 	else{
 		fprintf(stderr, "[Connection] Registretion Successfull\n");
 		
 		log_in(name);
 		
-		if(sprintf(buffer, "%s", CMP_REGISTER_ACC) < 0) ERR("sprintf");
-	}
-	
-	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) {
-		if(errno != EPIPE)
-			ERR("bulk_write");
+		cmp_send(fd, CMP_REGISTER_ACC, NULL);
 	}
 }
 
@@ -133,20 +116,24 @@ void msg_game_ext_handler(int fd, int id)
 
 	for(i = 0;i < CMP_P_GAMES_SIZE; i++){
 		if(games[i] == CMP_P_EOA) {
+			break;
+		}
+		if(games[i] == id) {
 			game_exists = 0;
 			break;
 		}
 		fprintf(stderr, "[Connection] Game#%d id: %d\n", i, games[i]);
 	}
 
-	if(game_exists == 0){
+	if(game_exists == 0) {
 		// send acc reply
 		join_game(id);
 		change_status(CMP_S_IN_GAME);
 		
 		if(snprintf(buffer, CMP_BUFFER_SIZE, "%s%d", CMP_GAME_JOIN_ACC, id) < 0) ERR("sprintf");
 		
-	}else{
+	}
+	else {
 		if(snprintf(buffer, CMP_BUFFER_SIZE, "%s%d", CMP_GAME_JOIN_REJ, id) < 0) ERR("sprintf");
 	}
 
@@ -158,39 +145,39 @@ void msg_game_ext_handler(int fd, int id)
 	free(games);
 }
 
+/**
+ * Currently this function is a major work-around.
+ * Works but is not a shinning example of how programming should be done
+ * */
 void msg_status_handler(int fd)
 {
 	int i;
 	int* games;
-	char* msg;
+	//char* msg = (char*)malloc(CMP_BUFFER_SIZE*sizeof(char));
 	char buffer[CMP_BUFFER_SIZE];
 	
 	fprintf(stderr, "[Connection] Status handler\n");
 	
 	games = db_player_get_games_id(player_name);
-
-	//msg = (char*)games;
-	
-	strncpy(msg, (char*)games, CMP_BUFFER_SIZE);
-	
-	for(i = 0; i < CMP_P_GAMES_SIZE; i++){
-		if(games[i] == CMP_P_EOA) break;
-		
-		fprintf(stdout, "ID: %d:\n", games[i]);
-	}
-
-	if(snprintf(buffer, CMP_BUFFER_SIZE, "%s%s", 
-				CMP_STATUS_RESPONSE, msg) < 0) ERR("sprintf");
-
-	char test_char[CMP_BUFFER_SIZE];
-	strncpy(test_char, buffer + CMP_HEADER_SIZE, CMP_BUFFER_SIZE);
-	int* test = (int*)(test_char);
+	buffer[0] = 's';
+	buffer[1] = 'r';
 
 	for(i = 0; i < CMP_P_GAMES_SIZE; i++){
-		if(test[i] == CMP_P_EOA) break;
-		
-		fprintf(stdout, "ID: %d:\n", test[i]);
+		*(((int*)(buffer + CMP_HEADER_SIZE)+i)) = games[i];
+		if(games[i] == CMP_P_EOA) {
+			break;
+		}
 	}
+
+	for(i = 0; i < CMP_P_GAMES_SIZE; i++){
+		int id = *(((int*)(buffer + CMP_HEADER_SIZE)+i));
+		if(games[i] == CMP_P_EOA) {
+			break;
+		}
+		fprintf(stderr, "[Connection] ID: %d:\n", id);
+	}
+
+	fprintf(stderr, "[Connection] buffer: %s:\n", buffer);
 				
 	if(bulk_write(fd, buffer, CMP_BUFFER_SIZE) < 0 ) {
 		if(errno != EPIPE)
@@ -199,6 +186,126 @@ void msg_status_handler(int fd)
 	
 	free(games);
 }
+/// DONE
+void msg_game_board_handler(int fd)
+{
+	char buffer[DB_BOARD_SIZE];
+	
+	fprintf(stderr, "[Connection] board handler\n");
+	
+	db_get_board(current_game, buffer);
+	
+	cmp_send(fd, CMP_BOARD_RESPONSE, buffer);
+}
+/// DONE
+void msg_game_status_handler(int fd)
+{
+	int status;
+	char msg[CMP_MSG_SIZE];
+	fprintf(stderr, "[Connection] game status handler\n");
+	status = db_get_game_status(current_game);
+	
+	if(snprintf(msg, CMP_MSG_SIZE, "%d", status) < 0) ERR("sprintf");
+	
+	cmp_send(fd, CMP_GAME_STATUS_RESPONSE, msg);
+}
+/// DONE
+void msg_game_turn_handler(int fd)
+{
+	char* buff;
+	
+	fprintf(stderr, "[Connection] turn handler\n");
+	
+	buff = db_get_player_turn(current_game);
+	
+	fprintf(stderr, "[Connection] turn: %s\n", buff);
+	
+	if(strcmp(player_name, buff) == 0)
+		fprintf(stderr, " << It's me \n");
+	else
+		fprintf(stderr, " << It's oponent \n");
+	
+	cmp_send(fd, CMP_TURN_RESPONSE, buff);
+	
+	free(buff);
+}
+
+void msg_game_moves_handler(int fd)
+{
+	fprintf(stderr, "[Connection] moves handler\n");
+	cmp_send(fd, CMP_MOVES_RESPONSE, NULL);
+}
+/// DONE
+void msg_game_chat_handler(int fd)
+{
+	char buffer[BD_G_SIZE];
+	fprintf(stderr, "[Connection] chat handler\n");
+	
+	db_get_chat(current_game, buffer);
+	
+	cmp_send(fd, CMP_CHAT_RESPONSE, buffer);
+}
+/// DONE
+void msg_game_msg_handler(int fd, char* msg)
+{
+	fprintf(stderr, "[Connection] msg handler\n");
+	
+	db_add_chat_entry(current_game, player_name, msg);
+	
+	cmp_send(fd, CMP_MSG_RESPONSE, NULL);
+}
+/// DONE
+void msg_game_move_handler(int fd, char* msg)
+{
+	char opponent[BD_G_SIZE];
+	char* p_turn;
+	
+	fprintf(stderr, "[Connection] move handler\n");
+	
+	db_get_opponent(current_game, player_name, opponent);
+	p_turn = db_get_player_turn(current_game);
+	
+	if(db_get_game_status(current_game) != DB_H_G_SS_RESOLVED && opponent != NULL && p_turn != NULL && strcmp(player_name, p_turn) == 0) {
+		int x1, y1, x2, y2;
+		fprintf(stderr, "[Connection] msg: %s\n", msg);	
+		if(TEMP_FAILURE_RETRY(sscanf(msg, "%d,%d,%d,%d", 
+					&x1, &y1, &x2, &y2)) < 0) ERR("close");
+		
+		fprintf(stderr, "[Connection] x1: %d, y1: %d -> x2; %d, y2: %d\n", x1, y1, x2 ,y2);
+		
+		db_board_move(current_game, x1, y1, x2, y2);
+		
+		fprintf(stderr, "[Connection] Switching turn to: %s\n", opponent);
+		
+		db_set_player_turn(current_game, opponent);
+		
+		cmp_send(fd, CMP_MOVE_RESPONSE_ACC, NULL);
+	}
+	else
+		cmp_send(fd, CMP_MOVE_RESPONSE_REJ, NULL);
+}
+/// DONE
+void msg_game_quit_handler(int fd)
+{
+	fprintf(stderr, "[Connection] quit handler\n");
+	
+	join_game(CN_NO_GAME);
+	change_status(CMP_S_LOGGED_IN);
+	
+	cmp_send(fd, CMP_QUIT_RESPONSE, NULL);
+}
+/// DONE
+void msg_game_forfeit_handler(int fd)
+{
+	fprintf(stderr, "[Connection] Forfeit handler: g_id %d\n", current_game);
+	
+	db_set_game_status(current_game, DB_H_G_SS_RESOLVED);
+	
+	join_game(CN_NO_GAME);
+	change_status(CMP_S_LOGGED_IN);
+	
+	cmp_send(fd, CMP_FORFEIT_RESPONSE, NULL);
+}
 
 /**
  * Handles incomming messages
@@ -206,9 +313,16 @@ void msg_status_handler(int fd)
 void msg_handler(int fd)
 {
 	char buffer[CMP_BUFFER_SIZE];
-	if(bulk_read(fd, buffer, CMP_BUFFER_SIZE) < 0 ) ERR("bulk_read");
+	char* msg;
+	int size;
 	
-	fprintf(stderr, "[Connection] after bulk_read: \n%s\n", buffer);
+	if((size = bulk_read(fd, buffer, CMP_BUFFER_SIZE)) < 0 ) ERR("bulk_read");
+	else if( size == 0){
+		c_do_continue = 0;
+		return;
+	}
+
+	fprintf(stderr, "[Connection] after bulk_read size %d: \n%s\n", size, buffer);
 	
 	// check the header
 	char header[CMP_HEADER_SIZE];
@@ -216,11 +330,12 @@ void msg_handler(int fd)
 	// some trash might be left out
 	if(memset(header+CMP_HEADER_SIZE, 0, CMP_HEADER_SIZE) < 0 ) ERR("memeset");
 
+	msg = buffer + CMP_HEADER_SIZE;
+
 	fprintf(stderr, "[Connection] after cmp_get_header\n");
 	
 	/// REGISTER
 	if (strcmp(header, CMP_REGISTER) == 0) {
-		// get the message it self
 		char* name = buffer + CMP_HEADER_SIZE;
 		msg_register_handler(fd, name);
 	} 
@@ -236,13 +351,48 @@ void msg_handler(int fd)
 	}
 	/// GAME EXISTING
 	else if (strcmp(header, CMP_GAME_EXT) == 0) {
-		// get the message it self
 		int id = atoi((buffer + CMP_HEADER_SIZE));
 		msg_game_ext_handler(fd, id);
 	}
 	/// STATUS
 	else if (strcmp(header, CMP_STATUS) == 0) {
 		msg_status_handler(fd);
+	}
+	/// BOARD
+	else if (strcmp(header, CMP_BOARD) == 0) {
+		msg_game_board_handler(fd);
+	}
+	/// GAME STATUS
+	else if (strcmp(header, CMP_GAME_STATUS) == 0) {
+		msg_game_status_handler(fd);
+	}
+	/// TURN
+	else if (strcmp(header, CMP_TURN) == 0) {
+		msg_game_turn_handler(fd);
+	}
+	/// MOVES
+	else if (strcmp(header, CMP_MOVES) == 0) {
+		msg_game_moves_handler(fd);
+	}
+	/// CHAT
+	else if (strcmp(header, CMP_CHAT) == 0) {
+		msg_game_chat_handler(fd);
+	}
+	/// MSG
+	else if (strcmp(header, CMP_MSG) == 0) {
+		msg_game_msg_handler(fd, msg);
+	}
+	/// MOVE
+	else if (strcmp(header, CMP_MOVE) == 0) {
+		msg_game_move_handler(fd, msg);
+	}
+	/// QUIT
+	else if (strcmp(header, CMP_QUIT) == 0) {
+		msg_game_quit_handler(fd);
+	}
+	/// FORFEIT
+	else if (strcmp(header, CMP_FORFEIT) == 0) {
+		msg_game_forfeit_handler(fd);
 	}
 	else {
 		perror("unknown message");
@@ -270,18 +420,20 @@ void connection_work(int cfd)
 	sigprocmask (SIG_BLOCK, &mask, &oldmask);
 	
 	while(c_do_continue){
+		//msg_handler(cfd);
+		
 		rfds=base_rfds;
 
 		fprintf(stderr,"[Connection] starting pselect \n");
 		if(pselect(cfd+1,&rfds,NULL,NULL,NULL,&oldmask)>0){
-			if(FD_ISSET(cfd,&rfds)){
+			if(FD_ISSET(cfd,&rfds)) {
 				fprintf(stderr,"[Connection] received socket data \n");
 				msg_handler(cfd);
 			}
 			// TODO admin console input
 		}
 		// pselect error
-		else{
+		else {
 			if(EINTR==errno) continue;
 			ERR("pselect");
 		}
